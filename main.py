@@ -2229,6 +2229,14 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv == ["--gui"]:
         app = build_app()
+        from ui.web_desktop import run_desktop
+
+        try:
+            return run_desktop(app.cfg)
+        finally:
+            app.store.close()
+    if argv == ["--legacy-gui"]:
+        app = build_app()
         from ui.workbench import run_workbench
 
         return run_workbench(app.cfg)

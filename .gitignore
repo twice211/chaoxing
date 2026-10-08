@@ -19,3 +19,5 @@ __pycache__/
 .venv/
 venv/
 .worktrees/
+frontend/node_modules/
+frontend/.vite/

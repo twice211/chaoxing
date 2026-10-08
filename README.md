@@ -1,5 +1,41 @@
 # 学习通课程学习 + 刷题 + 错题整理 + 开卷期末 AI 辅助工具
 
+## 新版桌面工作台
+
+默认界面已迁移为 **React + TypeScript + pywebview**。课程学习、章节练习、成绩、讨论、资料搜索、错题回顾和设置使用新的桌面界面；浏览器控制、SQLite 和 AI 逻辑仍由 Python 执行。
+
+```powershell
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+python main.py
+```
+
+也可以双击 `启动学习通助手.bat`。仓库包含已构建的 `frontend/dist`，日常运行不需要 Node.js。Windows 使用 Microsoft Edge WebView2 Runtime；如启动提示缺少运行时，请先安装它。
+
+在左侧「设置」里填写 API 密钥、接口地址和模型名，开启 AI 后保存。密钥输入框不会回显已有密钥：**留空保留原值**，输入新值可替换，删除需点击「清除 API 密钥」并确认。「测试已保存的连接」使用已保存的配置，会发起一次真实 API 请求。环境变量仍优先于配置文件。
+
+设置保存成功后才会显示完成提示。任务可随时通过顶部「取消当前任务」请求停止；讨论发布继续要求核对完整内容并明确确认。密钥不会返回给网页界面，桌面静态服务器只提供 `frontend/dist` 中的文件。
+
+原 Tkinter 工作台和命令行仍可使用：
+
+```powershell
+python main.py --legacy-gui
+python main.py menu
+```
+
+修改前端时，在 `frontend` 目录使用 Node.js 22.12+：
+
+```powershell
+npm ci
+npm run dev
+npm run build
+npm test
+```
+
+开发浏览器预览只显示界面，实际课程操作需要从桌面启动。构建后的 `frontend/dist` 随代码提交；`node_modules`、个人配置、浏览器资料和日志不提交。
+
+新增验证：`python -m unittest tests.test_web_bridge tests.test_web_desktop tests.test_web_frontend -v`。前端集成检查使用本地测试数据与模拟平台动作，不调用真实课程或 AI 接口。下方原有界面操作说明可结合 `--legacy-gui` 使用。
+
 > 一个基于 **Python 3.11 + Playwright + SQLite** 的个人学习助手：
 > 自动完成课程学习（视频/文档/PPT）、识别并整理练习题、建立课程知识库，
 > 并在**课程明确允许开卷 + 允许 AI 辅助**的期末考试中提供“只读侧边栏”AI 辅助。
