@@ -1,0 +1,303 @@
+<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><title>学习通课程助手 使用说明</title><style>
+@page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+* { box-sizing: border-box; }
+body { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+       font-size: 10.5pt; line-height: 1.62; color: #1f2329; margin: 0; }
+h1 { font-size: 21pt; color: #0b3d91; border-bottom: 3px solid #0b3d91; padding-bottom: 8px;
+     margin: 0 0 14px; page-break-before: avoid; }
+h2 { font-size: 14.5pt; color: #0b3d91; margin: 22px 0 8px; padding-left: 8px;
+     border-left: 5px solid #0b3d91; page-break-after: avoid; }
+h3 { font-size: 12pt; color: #1a56b8; margin: 16px 0 6px; page-break-after: avoid; }
+p { margin: 6px 0; }
+hr { border: 0; border-top: 1px dashed #c2c8d0; margin: 14px 0; }
+ul, ol { margin: 6px 0 6px 22px; padding: 0; }
+li { margin: 3px 0; }
+code { font-family: Consolas, "Courier New", monospace; background: #f2f4f7; color: #b02418;
+       padding: 1px 4px; border-radius: 3px; font-size: 9.5pt; }
+pre { background: #f7f8fa; border: 1px solid #dfe3e8; border-left: 4px solid #0b3d91; border-radius: 4px;
+      padding: 9px 11px; overflow-x: auto; page-break-inside: avoid; }
+pre code { background: none; color: #24292f; padding: 0; font-size: 9pt; line-height: 1.5; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 9.5pt;
+        page-break-inside: avoid; }
+th, td { border: 1px solid #d0d7de; padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: #eaf1fb; color: #0b3d91; font-weight: 600; }
+tr:nth-child(even) td { background: #fafbfc; }
+blockquote { margin: 8px 0; padding: 8px 12px; background: #fff8e6; border-left: 4px solid #e0a800;
+             color: #4a3c00; page-break-inside: avoid; }
+blockquote p { margin: 2px 0; }
+.tip { color: #6a737d; font-size: 9pt; }
+.page-footer { text-align: center; color: #8a9099; font-size: 8.5pt; margin-top: 18px; }
+</style></head><body><h1>学习通课程助手 使用说明</h1>
+<blockquote><p>适用版本：<code>C:\Users\77338\Desktop\chaoxing</code>（Python 3.11 + Playwright + SQLite） 文档定位：<strong>面向日常使用的操作手册</strong>。安装依赖、二次开发请看项目根目录的 <code>README.md</code>。</p></blockquote>
+<hr/>
+<h2>0. 一分钟看懂：它能做什么、不能做什么</h2>
+<p><strong>能帮你做的事</strong></p>
+<table><thead><tr><th>场景</th><th>命令</th><th>效果</th></tr></thead><tbody><tr><td>刷课</td><td><code>python main.py study --course 课程名</code></td><td>自动进入未完成章节，视频按 1.0 倍速真实播放，文档/PPT 真实停留，进度自动记录，中断后可续</td></tr><tr><td>练习题不会做</td><td><code>python main.py practice --course 课程名</code></td><td>识别单选/多选/判断/填空/简答，给出答案、解析、知识点、可信度与本地资料依据</td></tr><tr><td>错题整理</td><td><code>python main.py wrong list / drill / export</code></td><td>自动汇总错题、统计薄弱知识点、重练、导出 md/JSON/CSV，可为错题出强化题</td></tr><tr><td>资料检索</td><td><code>python main.py search 关键词 --ai</code></td><td>把课件/讲义/PPT/PDF 建成知识库，支持“第二章电路分析”“这个公式怎么用”式搜索</td></tr><tr><td>开卷期末考试</td><td><code>python main.py exam --course 课程名</code></td><td>侧边栏只读辅助：当前题 + AI 分析 + 课程依据 + 相似题 + 提交前确认清单</td></tr></tbody></table>
+<p><strong>绝对不会做的事（代码层面禁止，配置也打不开）</strong></p>
+<ul>
+<li>不自动登录、不识别/绕过验证码、不代填账号密码</li>
+<li>不自动勾选答案、不点击“提交答案”——<strong>所有作答与提交由你本人完成</strong></li>
+<li>不加速刷课（倍速被强制 ≤ 1.0）、不跳进度、不伪造挂机状态、不绕过切屏/后台暂停检测</li>
+<li>不修改学习通服务器数据、不伪造学习或考试记录、不修改考试倒计时</li>
+<li>不绕过教师设置的任何考试限制；页面或通知里出现“闭卷/禁止 AI”时，考试模式<strong>自动关闭</strong></li>
+</ul>
+<blockquote><p>合规前提：本课程/本次考试<strong>明确允许</strong>开卷并允许 AI 辅助。请始终以学校、教师与学习通当次考试的具体规定为准。</p></blockquote>
+<hr/>
+<h2>1. 开始前的准备（只需做一次）</h2>
+<h3>1.1 检查环境</h3>
+<pre><code>cd C:\Users\77338\Desktop\chaoxing
+python --version                      # 需要 3.11 及以上
+python -m pip install -r requirements.txt
+python -m playwright install chromium # 下载浏览器内核，约 130MB</code></pre>
+<h3>1.2 自检（确认代码完好）</h3>
+<pre><code>python main.py selftest    # 期望：结果：10/10 通过（不联网、不开浏览器）
+python main.py btest       # 期望：结果：9/9  通过（本地样例页面 + Chromium）</code></pre>
+<h3>1.3 配置 AI（不配也能用，只是不出 AI 答案）</h3>
+<p>用记事本或 VS Code 打开 <code>user_config.py</code>，填入你的密钥：</p>
+<pre><code>AI_API_KEY = &quot;sk-你的密钥&quot;
+AI_BASE_URL = &quot;https://api.deepseek.com/v1&quot;   # 服务商接口地址
+AI_MODEL = &quot;deepseek-chat&quot;                     # 模型名</code></pre>
+<p>不想把密钥写进文件，可以用环境变量（PowerShell，仅当前窗口有效）：</p>
+<pre><code>$env:AI_API_KEY  = &quot;sk-你的密钥&quot;
+$env:AI_BASE_URL = &quot;https://api.deepseek.com/v1&quot;
+$env:AI_MODEL    = &quot;deepseek-chat&quot;</code></pre>
+<p>常用服务商参考：</p>
+<table><thead><tr><th>服务商</th><th>AI_BASE_URL</th><th>AI_MODEL 示例</th></tr></thead><tbody><tr><td>OpenAI</td><td><code>https://api.openai.com/v1</code></td><td><code>gpt-4o-mini</code></td></tr><tr><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td><code>deepseek-chat</code></td></tr><tr><td>Kimi（月之暗面）</td><td><code>https://api.moonshot.cn/v1</code></td><td><code>moonshot-v1-32k</code></td></tr><tr><td>智谱 GLM</td><td><code>https://open.bigmodel.cn/api/paas/v4</code></td><td><code>glm-4-plus</code></td></tr><tr><td>通义（兼容模式）</td><td><code>https://dashscope.aliyuncs.com/compatible-mode/v1</code></td><td><code>qwen-plus</code></td></tr><tr><td>本地 Ollama</td><td><code>http://localhost:11434/v1</code></td><td><code>qwen2.5:14b</code>（密钥随意填）</td></tr></tbody></table>
+<blockquote><p>未配置密钥时程序不会崩溃：仍会提取题目、检索本地资料，只在 AI 栏位写明“AI 未启用”，<strong>不会编造答案</strong>。</p></blockquote>
+<hr/>
+<h2>2. 第一次使用：五步跑通</h2>
+<pre><code># ① 登录：弹出浏览器窗口，账号密码 + 验证码 + 身份验证全部由你本人完成
+python main.py login
+
+# ② 同步课程列表（登录态会保存在 data\browser_profile，下次免登录）
+python main.py courses
+
+# ③ 同步某门课的章节目录，识别 视频 / 文档 / PPT / 章节测验 / 练习题
+python main.py sync --course 电路
+
+# ④ 自动学习未完成内容（此窗口保持在前台，别切走）
+python main.py study --course 电路
+
+# ⑤ 查看进度统计
+python main.py status</code></pre>
+<p><code>status</code> 输出示例：</p>
+<pre><code>学习状态
+[信息] 课程 1 门 ｜ 学习项 42 ｜ 已完成 30 ｜ 未完成 12
+[信息] 累计真实学习时长：6小时18分42秒
+[信息] 题库 96 题 ｜ 错题 11 条（累计错 17 次）
+[信息] 知识库 9 份已完成资料 / 214 个知识块</code></pre>
+<hr/>
+<h2>3. 场景一：刷课（视频 / 文档 / PPT）</h2>
+<pre><code>python main.py study --course 电路                    # 处理全部未完成项
+python main.py study --course 电路 --limit 10         # 本次最多 10 项
+python main.py study --course 电路 --kinds video      # 只刷视频（document / ppt 同理）
+python main.py study --course 电路 --practice         # 遇到测验/练习，顺带进入刷题辅助
+python main.py study --course 电路 --no-kb            # 学习时不建知识库（更快）
+python main.py study --course 电路 --all              # 忽略完成标记，从头重做</code></pre>
+<p><strong>你需要知道的规则</strong></p>
+<ol>
+<li><strong>视频</strong>：定位到播放器（支持嵌套在 iframe 里）→ 强制 1.0 倍速 → 每 10 秒读取真实进度并写库 → 播放到 <code>ended</code> 或进度 ≥98.5% 判定完成 → 自动进入下一项。</li>
+<li><strong>窗口请保持前台</strong>：学习通检测到页面切后台会暂停播放。程序发现停滞后最多尝试恢复 3 次，仍失败就记录“待人工”，<strong>只提示你切回窗口，不伪造前台状态</strong>。</li>
+<li><strong>文档/PPT</strong>：按正文字数决定停留时长，之后<strong>以平台“已完成”标记为准</strong>；标记读不到时要求你人工确认，程序绝不自行判定完成。</li>
+<li><strong>断点续学</strong>：每条完成后写入 <code>items.done</code>，同时记录 <code>resume</code> 游标；中途 <code>Ctrl+C</code> 或直接关窗口，下次运行 <code>study</code> 会自动从中断处继续。</li>
+<li><strong>网络异常</strong>：页面打不开自动按 1.5s → 3s → 6s 退避重试，超过 <code>MAX_RETRY_PER_ITEM</code> 次记录失败并跳过；整体循环还有步数与“无进展”双重保护，<strong>不会死循环</strong>。</li>
+</ol>
+<hr/>
+<h2>4. 场景二：练习题不会做（刷题辅助）</h2>
+<pre><code># 先把浏览器停留在练习/测验页面，或直接把页面地址贴给 --url
+python main.py practice --course 电路
+python main.py practice --course 电路 --url &quot;https://mooc2-ans.chaoxing.com/...&quot;
+python main.py practice --course 电路 --limit 20</code></pre>
+<p><strong>每题输出格式（终端）</strong></p>
+<pre><code>──────────────────────────────────────────────────────────
+第 3/12 题 ｜ 单选题
+(单选题,2分)用戴维南定理求图示单口网络的等效电阻 R0 为( )
+  A. 4Ω
+  B. 6Ω
+【答案】 A
+【解析】 将独立源置零（电压源短路、电流源开路）后，两端看进去的电阻为 4Ω。
+【知识点】戴维南定理；等效电阻
+【所属章节】第二章 电路分析
+【资料依据】[资料1]《第2章 等效变换》第12张幻灯片（formula）：Req = Uoc / Isc……
+【可信程度】高
+
+你在页面上选择的答案（回车=稍后自行处理，w=我答错了要进错题本，q=结束）:</code></pre>
+<p><strong>要点</strong></p>
+<ol>
+<li>程序<strong>只分析不代答</strong>：你在页面上自己勾选，自己点击“提交答案”。</li>
+<li>支持题型：单选、多选、判断、填空、简答（自动识别题号、题干、选项、分值、你已勾选的答案）。</li>
+<li><strong>重复题检测</strong>：题干指纹（忽略题号、标点、选项顺序）命中已有题目会提示“重复题”，还会做近似相似匹配（阈值 0.93）。</li>
+<li><strong>判分结果回填</strong>：你自己提交后进入“查看成绩/答题结果”页面，再次运行 <code>practice</code>，选“导入平台判分结果”，错题会自动进入错题库、答对的会累计正确次数。</li>
+<li><strong>可信度机制</strong>：题干歧义、图片题（AI 看不到图）、本地资料不足时，会明确标注“需要人工确认”，并在【资料依据】写“课程资料中没有找到直接依据”。<strong>禁止编造来源是代码级校验</strong>：AI 引用不存在的编号会被判定无效引用并自动降级。</li>
+</ol>
+<hr/>
+<h2>5. 场景三：错题整理与强化练习</h2>
+<pre><code>python main.py wrong list                 # 待复习错题
+python main.py wrong list --all           # 含已掌握
+python main.py wrong stats                # 按知识点统计薄弱项
+python main.py wrong drill --limit 10     # 错题重练（答对两次自动标记“已掌握”）
+python main.py wrong export --fmt md      # 导出到 data\exports\（可选 json / csv）
+python main.py wrong similar --id 12 --n 2 # 给第 12 题出 2 道同知识点强化题</code></pre>
+<p><strong>题库字段（SQLite <code>questions</code> 表）</strong>：题目 → 选项 → 答案 → 解析 → 知识点 → 所属章节 → 错误次数 → 来源（平台判分/AI/人工）。</p>
+<p><strong>错题来源三条路</strong></p>
+<ol>
+<li>平台判分页只读导入（最准确，推荐考后/练习后执行）；</li>
+<li>练习过程中你回答 <code>w</code>（“这题我错了”）即时入库；</li>
+<li>练习时输入答案后由 AI 判分（仅练习场景，考试场景不做自动判分）。</li>
+</ol>
+<p><strong>重练交互示例</strong></p>
+<pre><code>第 1/10 题 ｜ 多选题
+下列属于储能元件的是
+  A. 电容  B. 电感  C. 电阻
+上次解析：电容储存电场能、电感储存磁场能……
+你的答案（直接回车=跳过，w=我还是不会，q=结束）: AB
+[完成] 回答正确（参考答案：AB）
+? 是否生成 2 道同知识点强化题？（y/N）: y
+[完成] 已生成 2 道同知识点强化题</code></pre>
+<hr/>
+<h2>6. 场景四：课程知识库与搜索</h2>
+<pre><code># ① 建库：下载课程里的文档/PPT/PDF，并把小节页面正文抓取入库（可反复执行，增量）
+python main.py kb build --course 电路 --limit 50
+
+# ② 你自己整理的笔记也纳入检索（支持 pdf / docx / pptx / txt / md / html）
+python main.py kb local --dir D:\我的笔记 --course 电路
+
+python main.py kb docs                 # 查看已入库资料与状态
+python main.py kb search &quot;第二章 等效电路&quot; --top 8</code></pre>
+<p><strong>搜索用法（资料 → 章节 → 历史题 → 错题 → AI 综合）</strong></p>
+<pre><code>python main.py search 戴维南定理
+python main.py search 搜索：第二章电路分析
+python main.py search 搜索：这个公式怎么用
+python main.py search 节点电压法 步骤 --ai      # 让 AI 基于本地资料片段综合，并标注引用编号</code></pre>
+<p>输出会分三段：<strong>课程资料</strong>（含《标题》+ 页码/幻灯片定位 + 相关度）、<strong>历史题目</strong>、<strong>相关错题</strong>；<code>--ai</code> 再附「AI 综合」，且只引用检索到的编号。检索引擎是纯 Python BM25，<strong>完全离线可用</strong>；装了 <code>jieba</code>（见 <code>requirements-optional.txt</code>）中文分词更准，不装则用字符+二元组，功能不受影响。</p>
+<hr/>
+<h2>7. 场景五：开卷期末考试 AI 辅助（默认关闭）</h2>
+<h3>7.1 开启前必须满足的三重条件（缺一不可）</h3>
+<ol>
+<li><strong>配置开关</strong>：在 <code>user_config.py</code> 里把 <code>EXAM_MODE_ALLOWED</code> 改成 <code>True</code>（代表你已确认本场考试允许开卷且允许 AI）。</li>
+<li><strong>许可依据</strong>：建议同时填写 <code>EXAM_RULE_TEXT = &quot;本课程期末考试为开卷考试，允许使用 AI 辅助&quot;</code>；若为空，程序会尝试从考试页面读取说明文字。两者都读不到明确许可时，会要求你<strong>粘贴教师/课程通知原文</strong>，且必须命中“开卷/允许使用 AI”等表述才放行（该文本作为 <code>manual_grant</code> 事件写入 <code>exam_audit</code> 表以便追溯）。</li>
+<li><strong>运行时二次确认</strong>：启动后逐字输入确认口令（默认 <code>我已阅读并遵守考试规定</code>）并填写课程名。</li>
+</ol>
+<blockquote><p>任何一步不满足，考试模式都不会启用。反过来，只要规则文本或页面出现“闭卷 / 禁止使用 AI / 不得查阅资料 / 独立完成”等表述，程序会<strong>自动关闭</strong>考试模式（运行中途也会持续复核）。</p></blockquote>
+<h3>7.2 启动与界面</h3>
+<pre><code>python main.py exam --course 电路              # 默认弹出侧边栏小窗（置顶，不改动学习通页面）
+python main.py exam --course 电路 --console    # 纯终端版（远程/无图形环境时用）</code></pre>
+<p>侧边栏界面区块：</p>
+<pre><code>开卷考试 AI 辅助（只读模式）  √ 已启用
+页面：《电路分析》期末考试（开卷） ｜ 共 25 题 ｜ 当前 3/25 ｜ 剩余时间(只读)：1:12:45
+
+【当前题目】 题号 3 ｜ 判断题
+            节点电压法的方程来源于 KCL。
+【AI 分析】 【解析】节点电压法对独立节点列 KCL 方程……
+【答案】    正确
+【课程依据】[资料1]《第2章 电路分析》第18页（definition）：节点电压法……
+【相关知识点】节点电压法；KCL
+【相似题】  · 节点电压法以 KVL 为基础（错 2 次，知识点：节点电压法）
+【下一题】  按 N 仅滚动页面一屏（不点击、不填写）
+【提交前确认】按 T 生成本人确认清单；提交必须由你亲自点击</code></pre>
+<p>按键/命令对照：</p>
+<table><thead><tr><th>键</th><th>作用</th><th>键</th><th>作用</th></tr></thead><tbody><tr><td><code>A</code></td><td>读取当前题（视口中心那道题，纯只读）</td><td><code>S 关键词</code></td><td>快速搜索本地资料/历史题/错题</td></tr><tr><td><code>O</code></td><td>整卷读取，列题号概览</td><td><code>K</code></td><td>刷新页面状态与倒计时（只读）</td></tr><tr><td><code>D</code></td><td>AI 分析当前题</td><td><code>T</code></td><td><strong>提交前确认清单</strong></td></tr><tr><td><code>G 7</code></td><td>按题号分析第 7 题</td><td><code>N</code> / <code>P</code></td><td>向下 / 向上滚动一屏（仅此一种页面动作）</td></tr><tr><td><code>Q</code></td><td>退出并关闭考试模式</td><td></td><td></td></tr></tbody></table>
+<h3>7.3 主观题与计算题输出</h3>
+<pre><code>【答案】
+① 核心结论：节点电压法以 KCL 为理论依据，对 n 个独立节点列 n-1 个方程。
+② 解题过程/理论依据：任选参考节点 → 列写各独立节点电流方程 → 用节点电压表示支路电流。
+③ 必要公式：Σi = 0；Gnn·Un = ΣI
+④ 最终答案：节点 A 电压 Ua = 6V，方向由高电位指向低电位。
+【知识点】节点电压法；KCL
+【资料依据】[资料1]《第2章》第18页……
+【可信程度】高</code></pre>
+<p>计算题被要求必须展示关键计算步骤（含代入数值与单位），不允许只给结果。</p>
+<h3>7.4 提交前确认清单（T）</h3>
+<pre><code>==============================================================
+提交前确认清单（请逐条自己核对，程序不会替你提交）
+==============================================================
+1. 本地识别题目数：25 题
+2. 页面上尚未选择/填写的题号：7、13、21
+3. AI 判定“需要人工确认”的题号：3、7、21
+4. 含图片、AI 看不到题面的题号：7、13
+5. 剩余时间（只读展示，未做任何修改）：48:12
+6. 需要你本人完成：核对题号 → 检查未答题 → 逐题确认 → 亲自点击“提交答案”。</code></pre>
+<hr/>
+<h2>8. 命令速查</h2>
+<pre><code>login      打开浏览器，等待你本人完成登录
+courses    同步“我的课程”列表
+sync       同步某门课程的章节目录与学习项        --course
+study      自动学习未完成内容                    --course --limit --kinds --practice --no-kb --all
+practice   刷题辅助（AI 分析，作答与提交由你完成）--course --url --chapter --limit
+kb         build | local | search | docs         --course --dir --limit --top
+search     统一搜索（资料/章节/题目/错题）        &lt;关键词...&gt; --course --top --ai
+wrong      list | stats | export | drill | similar --course --limit --fmt md|json|csv --id --n
+exam       开卷考试 AI 辅助（只读侧边栏）          --course --url --gui --console
+status     学习进度与统计
+dump       导出页面 HTML，用于适配选择器           --url --tag
+selftest   离线逻辑自检（10 项）
+btest      离线页面结构自检（9 项，需 Chromium）</code></pre>
+<p>任意命令加 <code>-h</code> 看参数，例如 <code>python main.py study -h</code>。</p>
+<hr/>
+<h2>9. 配置项说明（<code>user_config.py</code>，改完直接生效）</h2>
+<table><thead><tr><th>配置</th><th>默认</th><th>说明</th></tr></thead><tbody><tr><td><code>USER_DATA_DIR</code></td><td><code>data/browser_profile</code></td><td>浏览器用户目录，登录态存这里，<strong>换目录=重新登录</strong></td></tr><tr><td><code>LOGIN_WAIT_TIMEOUT_SEC</code></td><td><code>900</code></td><td>等你本人登录的最长秒数</td></tr><tr><td><code>VIDEO_PLAYBACK_RATE</code></td><td><code>1.0</code></td><td>只允许 ≤1.0，填大值会被强制改回并告警</td></tr><tr><td><code>VIDEO_POLL_SEC</code> / <code>VIDEO_STALL_TIMEOUT_SEC</code></td><td><code>10</code> / <code>120</code></td><td>进度轮询间隔 / 判定停滞的秒数</td></tr><tr><td><code>MAX_ITEMS_PER_RUN</code></td><td><code>200</code></td><td>单次运行最多处理条目数（防跑飞）</td></tr><tr><td><code>MAX_RETRY_PER_ITEM</code></td><td><code>3</code></td><td>单个条目失败重试次数</td></tr><tr><td><code>ACTION_MIN_INTERVAL_SEC</code></td><td><code>1.2</code></td><td>相邻页面操作最小间隔（对服务器友好）</td></tr><tr><td><code>AI_ENABLE</code></td><td><code>True</code></td><td>设为 <code>False</code> 可完全离线：只做检索，不调用模型</td></tr><tr><td><code>AI_BASE_URL</code> / <code>AI_MODEL</code> / <code>AI_API_KEY</code></td><td>见第 1.3 节</td><td>任意 OpenAI 兼容服务</td></tr><tr><td><code>AI_MAX_RETRY</code> / <code>AI_RETRY_BACKOFF</code> / <code>AI_TIMEOUT_SEC</code></td><td><code>3</code> / <code>2.0</code> / <code>90</code></td><td>AI 请求重试与超时</td></tr><tr><td><code>KB_DOWNLOAD_DIR</code> / <code>KB_MAX_DOC_MB</code></td><td><code>data/downloads</code> / <code>60</code></td><td>课件下载目录与单文件大小上限</td></tr><tr><td><code>KB_CHUNK_SIZE</code> / <code>KB_TOP_K</code></td><td><code>900</code> / <code>6</code></td><td>检索分块长度 / 默认返回条数</td></tr><tr><td><code>EXAM_MODE_ALLOWED</code></td><td><code>False</code></td><td>考试模式总开关（三重闸门之一）</td></tr><tr><td><code>EXAM_RULE_TEXT</code></td><td>空</td><td>教师许可原文，建议填写</td></tr><tr><td><code>EXAM_ACK_PHRASE</code></td><td><code>我已阅读并遵守考试规定</code></td><td>运行时逐字确认口令</td></tr><tr><td><code>EXAM_UI</code></td><td><code>tkinter</code></td><td><code>console</code> 可切终端版</td></tr><tr><td><code>EXAM_ALLOW_SCROLL</code></td><td><code>True</code></td><td>是否允许“仅滚动一屏”；填 <code>False</code> 则连滚动都不做</td></tr><tr><td><code>EXAM_AI_MAX_PER_MIN</code></td><td><code>6</code></td><td>考试期间 AI 调用频率上限</td></tr><tr><td><code>SELECTOR_OVERRIDES</code></td><td>注释示例</td><td>学习通改版时补选择器，见第 11 节</td></tr></tbody></table>
+<hr/>
+<h2>10. 数据在哪里 / 备份与重置</h2>
+<table><thead><tr><th>路径</th><th>内容</th></tr></thead><tbody><tr><td><code>data\study_helper.db</code></td><td>全部核心数据：课程、章节、学习项、学习流水、题库、错题库、知识库、考试审计</td></tr><tr><td><code>data\browser_profile\</code></td><td>浏览器登录态（搬家/删除需重新登录）</td></tr><tr><td><code>data\downloads\</code></td><td>抓取下来的课件与文档</td></tr><tr><td><code>data\exports\</code></td><td><code>wrong export</code> 导出的错题本（md/json/csv）</td></tr><tr><td><code>data\dumps\</code></td><td><code>dump</code> 导出的页面 HTML（排障用，可删）</td></tr><tr><td><code>logs\study_helper.log</code></td><td>运行日志（滚动 5MB×5）</td></tr></tbody></table>
+<pre><code># 备份（学习进度 + 题库 + 错题）
+Copy-Item .\data\study_helper.db D:\备份\study_helper_$(Get-Date -Format yyyyMMdd).db
+
+# 查看某门课进度
+python -c &quot;import sqlite3;[print(r) for r in sqlite3.connect(&#x27;data/study_helper.db&#x27;).execute(&#x27;SELECT title,kind,done,progress FROM items LIMIT 20&#x27;)]&quot;
+
+# 查看全部考试模式行为记录（证明只读、未代提交）
+python -c &quot;import sqlite3;[print(r) for r in sqlite3.connect(&#x27;data/study_helper.db&#x27;).execute(&#x27;SELECT ts,event,detail FROM exam_audit ORDER BY id DESC LIMIT 20&#x27;)]&quot;</code></pre>
+<ul>
+<li><strong>清空学习进度</strong>：<code>python main.py study --course X --all</code> 重做，或删 <code>data\study_helper.db</code>（<strong>会同时清空题库与知识库，慎用</strong>）。</li>
+<li><strong>只删知识库</strong>：<code>python -c &quot;import sqlite3;c=sqlite3.connect(&#x27;data/study_helper.db&#x27;);c.execute(&#x27;DELETE FROM kb_chunks&#x27;);c.execute(&#x27;DELETE FROM kb_docs&#x27;);c.commit()&quot;</code></li>
+<li><strong>重新登录别的账号</strong>：关闭所有窗口后删除 <code>data\browser_profile</code>。</li>
+</ul>
+<hr/>
+<h2>11. 常见问题（FAQ）</h2>
+<p><strong>Q1 会不会因为脚本访问被判定异常？</strong> 程序内置操作间隔（默认 ≥1.2 秒）、失败退避与步数上限；不并发、不高频。请自行遵守学校与平台的使用要求。</p>
+<p><strong>Q2 卡在“请在浏览器窗口完成登录”怎么办？</strong> 在弹出的窗口里正常登录（含验证码/短信/扫码）。登录成功会自动继续；最长等待 15 分钟，可加大 <code>LOGIN_WAIT_TIMEOUT_SEC</code>。<strong>程序不会代填账号或验证码。</strong></p>
+<p><strong>Q3 <code>study</code> 里视频一直不动 / 学到一半停住？</strong> 把浏览器窗口切回前台并保持（切后台会被平台暂停）；若反复停滞，程序会记录“待人工”，你可以手动播完再运行 <code>python main.py status</code> 核对。</p>
+<p><strong>Q4 提示“没有识别到题目”或“目录抓不到”？</strong> 多半是学习通前端改版。步骤：</p>
+<ol>
+<li><code>python main.py dump --url &quot;页面地址&quot;</code> 导出 HTML（含 iframe 内容）到 <code>data\dumps\</code>；</li>
+<li>在 HTML 里找稳定的 class/id（例如 <code>div.newQuestion</code>、<code>.question-title</code>）；</li>
+<li>在 <code>user_config.py</code> 追加：</li>
+</ol>
+<pre><code>SELECTOR_OVERRIDES = {
+    &quot;question_root&quot;: [&quot;div.newQuestion&quot;],
+    &quot;question_stem&quot;: [&quot;.question-title&quot;],
+    &quot;catalog_section&quot;: [&quot;#newCatalog a&quot;],
+}</code></pre>
+<p>无需改动任何业务代码，重启命令即生效。</p>
+<p><strong>Q5 错题本一直是空的？</strong> 错题来自“判分导入”或练习中标 <code>w</code>。练习提交后进入<strong>查看成绩/答题结果</strong>页，再运行 <code>practice</code> 并选择导入判分结果。</p>
+<p><strong>Q6 <code>search</code> 搜不到内容？</strong> 先建库：<code>python main.py kb build --course 课程名</code>；本地笔记用 <code>kb local --dir 目录</code>。用 <code>kb docs</code> 看是否 <code>status=done</code>。</p>
+<p><strong>Q7 AI 报错 429 / 超时 / 无输出？</strong> 已自动重试（<code>AI_MAX_RETRY</code>）；仍失败可换更小上下文或更快的模型，或临时 <code>AI_ENABLE = False</code> 用纯本地检索。调用记录在 <code>ai_calls</code> 表。</p>
+<p><strong>Q8 AI 给的答案能直接信吗？</strong> 看【可信程度】：<code>高</code> 表示本地资料有直接依据；<code>中</code> 建议复核；<code>需要人工确认</code> 必须自己判断（常见于题干含图片、题面信息不完整）。程序会在 AI 引用了不存在的资料编号时<strong>强制降级并提示</strong>。</p>
+<p><strong>Q9 <code>exam</code> 命令直接退出，提示 EXAM_MODE_ALLOWED？</strong> 正常的安全行为。只有你确认本场考试允许开卷+允许 AI，才把该项设为 <code>True</code>，并按提示输入确认口令与课程名。</p>
+<p><strong>Q10 终端中文乱码？</strong> 程序启动会自动把控制台切到 UTF-8；仍乱码时执行 <code>chcp 65001</code>，或改用 Windows Terminal。</p>
+<p><strong>Q11 侧边栏窗口出不来？</strong> 用 <code>python main.py exam --course 课程名 --console</code> 走终端版。</p>
+<p><strong>Q12 能同时处理多门课吗？</strong> 可以。每条命令都用 <code>--course 课程名或id</code> 指定；<code>python main.py status</code> 会列出全部门课的完成百分比。</p>
+<p><strong>Q13 换电脑怎么迁移？</strong> 复制整个项目目录（含 <code>data\study_helper.db</code> 与 <code>data\browser_profile</code>）到新机器，安装 <code>requirements.txt</code> 与 <code>playwright install chromium</code> 即可；<code>user_config.py</code> 里的绝对路径注意同步修改。</p>
+<hr/>
+<h2>12. 故障排查清单（按顺序检查）</h2>
+<ol>
+<li><code>python --version</code> ≥ 3.11；</li>
+<li><code>python main.py selftest</code> 与 <code>btest</code> 全通过（不通过说明代码/依赖被改动）；</li>
+<li><code>python main.py login</code> 能看到浏览器窗口并成功登录；</li>
+<li><code>python main.py courses</code> 能列出课程（列不到 → 用 <code>dump</code> 校准选择器）；</li>
+<li><code>python main.py sync --course X</code> 后 <code>status</code> 中“学习项”不为 0；</li>
+<li><code>study</code> 期间窗口保持前台；</li>
+<li>AI 相关异常看 <code>logs\study_helper.log</code> 与 <code>ai_calls</code> 表；</li>
+<li>页面结构问题用 <code>dump --url ...</code>，把 HTML 与报错一起反馈即可定位。</li>
+</ol>
+<hr/>
+<h2>13. 安全与合规红线（再次强调）</h2>
+<ul>
+<li>本工具定位是<strong>学习与开卷考试的辅助</strong>，适用于课程/教师<strong>明确允许</strong>开卷查阅与 AI 辅助的场合；</li>
+<li>若当次考试规定禁止 AI、禁止查阅资料，或要求独立作答：<strong>立即停止使用考试模式</strong>，按教师要求执行；</li>
+<li>答案正确性由使用者本人负责，AI 输出仅供参考；</li>
+<li>提交动作、验证码、登录验证必须本人完成；</li>
+<li>学习记录与判分结果均来自平台真实页面，程序不写入、不伪造任何服务器数据。</li>
+</ul>
+<hr/>
+<p class='tip'>文档生成于 2026-09-24。命令与配置项与代码保持一致；若你修改过 <code>user_config.py</code>，请以自己的配置为准。</p><div class='page-footer'>本文档由 tools/make_docs.py 自动生成，可用浏览器打开后自行打印</div></body></html>

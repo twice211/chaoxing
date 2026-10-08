@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>复刻：学习通视频随堂弹题（多选）</title>
+<style>
+ body{font:15px/1.6 "Microsoft YaHei UI",sans-serif;background:#eee;padding:24px}
+ .ans-videoquiz{background:#fff;border:1px solid #bbb;max-width:640px;padding:14px;position:relative}
+ .tkTopic_title{color:#888;font-size:13px}
+ .tkItem_title{margin:6px 0;font-weight:bold}
+ .tkItem_ul{list-style:none;padding:0;margin:8px 0}
+ .tkItem_ul li{padding:3px 0}
+ .tkRadio{display:inline-block;width:16px;height:16px;border:1px solid #999;border-radius:50%;
+          vertical-align:middle;margin-right:8px;text-align:center;color:#fff;font-size:12px}
+ .on .tkRadio{background:#2E6B4F;border-color:#2E6B4F}
+ .tkTopic_oper{margin-top:10px}
+ .tkTopic_oper a{display:inline-block;padding:4px 12px;border:1px solid #999;border-radius:4px;
+                 background:#f6f6f6;cursor:pointer;margin-right:8px}
+ #videoquiz-submitting,#videoquiz-continue{display:none}
+ #result{margin-top:12px;font-weight:bold}
+</style></head>
+<body>
+  <div class="x-component ans-videoquiz" id="videoquiz-1048">
+    <div class="tkTopic">
+      <div class="tkTopic_title">多选题</div>
+      <div class="tkItem">
+        <div class="tkItem_title">1979年邓小平《坚持四项基本原则》讲话。四项基本原则包括（）。</div>
+        <ul class="tkItem_ul">
+          <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt" value=""><i></i></span>A、必须坚持社会主义道路</label></li>
+          <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt" value=""><i></i></span>B、必须坚持无产阶级专政</label></li>
+          <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt" value=""><i></i></span>C、必须坚持中国共产党领导</label></li>
+          <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt" value=""><i></i></span>D、必须坚持马列主义，毛泽东思想</label></li>
+        </ul>
+      </div>
+      <div class="tkTopic_oper">
+        <a class="ans-videoquiz-submit" id="videoquiz-submit">提交</a>
+        <a class="ans-videoquiz-submit" id="videoquiz-submitting">提交中</a>
+        <a class="ans-videoquiz-continue" id="videoquiz-continue">继续</a>
+      </div>
+    </div>
+  </div>
+  <div id="result">未提交</div>
+  <div id="continued">未继续</div>
+
+  <script>
+    document.querySelectorAll('.tkItem_ul label').forEach(function(lb){
+      lb.addEventListener('click', function(){
+        var box = lb.querySelector('input[type=checkbox]');
+        lb.closest('li').classList.toggle('on', box.checked);
+      });
+    });
+    document.getElementById('videoquiz-submit').addEventListener('click', function(){
+      document.getElementById('result').textContent = 'SUBMITTED';
+      this.style.display='none';
+      document.getElementById('videoquiz-continue').style.display='inline-block';
+    });
+    document.getElementById('videoquiz-continue').addEventListener('click', function(){
+      document.getElementById('continued').textContent = 'CONTINUED';
+    });
+  </script>
+</body></html>

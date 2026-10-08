@@ -1,0 +1,35 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>模拟：视频弹题答错自动重试（正确=错）</title>
+<style>body{font:15px sans-serif;background:#eee;padding:24px}
+.ans-videoquiz{background:#fff;border:1px solid #bbb;max-width:620px;padding:14px}
+.tkItem_ul{list-style:none;padding:0}.tkItem_ul li{padding:3px 0}
+.tkTopic_oper a{display:inline-block;padding:4px 12px;border:1px solid #999;border-radius:4px;background:#f6f6f6;cursor:pointer;margin:10px 8px 0 0}
+.spanHas,.spanNot{display:none;color:#fff;background:#2E6B4F;padding:2px 8px;border-radius:4px;margin-left:8px}
+.spanNot{background:#C2333D}#videoquiz-continue{display:none}</style></head>
+<body>
+<div class="x-component ans-videoquiz" id="videoquiz-1"><div class="tkTopic">
+ <div class="tkTopic_title">判断题</div>
+ <div class="tkItem"><div class="tkItem_title">经济双轨制是指计划经济与市场经济并存的现象。</div>
+  <ul class="tkItem_ul">
+   <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="radio" name="ans-videoquiz-opt" value=""><i></i></span>A、对</label></li>
+   <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="radio" name="ans-videoquiz-opt" value=""><i></i></span>B、错</label></li>
+  </ul></div>
+ <div class="tkTopic_oper">
+   <a class="ans-videoquiz-submit" id="videoquiz-submit">提交</a>
+   <a class="ans-videoquiz-continue" id="videoquiz-continue">继续</a>
+   <span class="spanHas" id="spanHas">回答正确</span><span class="spanNot" id="spanNot">回答错误</span>
+ </div>
+</div></div>
+<div id="log">—</div>
+<script>
+ const CORRECT = 1;              // 正确项是「错」（下标1），AI 若答「对」(下标0) 会先答错再重试
+ const inputs = document.querySelectorAll("input[name='ans-videoquiz-opt']");
+ const has=document.getElementById('spanHas'), not=document.getElementById('spanNot'), cont=document.getElementById('videoquiz-continue');
+ inputs.forEach((r,i)=>r.addEventListener('click',()=>{has.style.display='none';not.style.display='none';cont.style.display='none';}));
+ document.getElementById('videoquiz-submit').addEventListener('click',()=>{
+   let idx=-1; inputs.forEach((r,i)=>{ if(r.checked) idx=i; });
+   if(idx<0){ document.getElementById('log').textContent='未选'; return; }
+   if(idx===CORRECT){ has.style.display='inline-block'; cont.style.display='inline-block'; document.getElementById('log').textContent='submit-correct-'+idx; }
+   else { not.style.display='inline-block'; document.getElementById('log').textContent='submit-wrong-'+idx; }
+ });
+ document.getElementById('videoquiz-continue').addEventListener('click',()=>{document.getElementById('log').textContent='CONTINUED';});
+</script></body></html>

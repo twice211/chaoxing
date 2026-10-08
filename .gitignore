@@ -1,0 +1,21 @@
+# 个人配置与本地数据，禁止提交
+user_config.py
+config.local.py
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+_dump_topics.json
+tools/cdp_batch_reply.py
+tools/cdp_finish_topics.py
+data/
+logs/
+downloads/
+*.db
+*.sqlite
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+.worktrees/

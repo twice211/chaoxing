@@ -1,0 +1,6 @@
+# 生成《使用说明》PDF 所需（tools/make_pdf_skill.py、tools/make_docs.py）
+reportlab>=4.0
+pdfplumber>=0.11
+pypdfium2>=4.30
+pypdf>=4.0
+playwright>=1.44

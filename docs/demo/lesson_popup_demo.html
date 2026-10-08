@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>演示：视频随堂弹题自动作答</title>
+<style>
+  body{font:15px/1.6 "Microsoft YaHei UI",sans-serif;background:#F2F4F7;margin:0;padding:24px}
+  #player{width:680px;height:360px;background:#0f1626;color:#dfe7f3;border-radius:8px;
+          display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  #player .bar{width:80%;height:8px;background:#2b3a52;border-radius:4px;overflow:hidden}
+  #player .bar>i{display:block;height:100%;width:0;background:#5b8cff;transition:width 1s linear}
+  .modal{position:fixed;top:22%;left:28%;width:44%;background:#fff;border:1px solid #b7c0cc;
+         border-radius:10px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .hidden{display:none}
+  .TiMu label{display:block;margin:6px 0}
+  #result{margin-top:16px;font-weight:bold;color:#2E6B4F}
+</style></head>
+<body>
+  <div id="player">
+    <div>视频播放中… <span id="clock">0</span>s</div>
+    <div class="bar"><i id="fill"></i></div>
+  </div>
+
+  <!-- 学习通风格：随堂弹题（第 4 秒自动弹出）。class 含 modal 以便被判定为弹窗题 -->
+  <div class="modal hidden" id="pop">
+    <div class="TiMu">
+      <div class="ZtZk">1.（单选题）叠加定理适用于（ ）</div>
+      <label for="cb0_1">A. 线性电路</label><input type="radio" id="cb0_1" name="q1">
+      <label for="cb1_1">B. 非线性电路</label><input type="radio" id="cb1_1" name="q1">
+    </div>
+    <button id="submitBtn" onclick="submit()" style="margin-top:10px">提交答案</button>
+  </div>
+
+  <div id="result">未提交</div>
+
+  <script>
+    let t = 0;
+    const tick = setInterval(() => {
+      t++;
+      document.getElementById('clock').textContent = t;
+      document.getElementById('fill').style.width = Math.min(100, t * 4) + '%';
+      if (t === 4) { document.getElementById('pop').classList.remove('hidden'); }  // 第4秒弹题
+    }, 1000);
+    function submit(){
+      document.getElementById('result').textContent = 'SUBMITTED';
+      document.getElementById('pop').classList.add('hidden');
+      clearInterval(tick);
+    }
+  </script>
+</body></html>
