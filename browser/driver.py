@@ -48,13 +48,28 @@ class Browser:
         self.context: BrowserContext | None = None
         self.page: Page | None = None
         self._pages: list[Page] = []
+        self._waiting_login = False
         apply_overrides(getattr(cfg, "SELECTOR_OVERRIDES", None) if not isinstance(cfg, dict) else cfg.get("SELECTOR_OVERRIDES"))
 
     # ------------------------------------------------------------ 生命周期
     def start(self) -> "Browser":
         """启动浏览器。必须在创建它的线程内使用（Playwright 线程约束）。"""
+        if self._waiting_login and (self.context is None or self.page is None or self.page.is_closed()):
+            raise LoginRequired("浏览器窗口已关闭，请再次点击“登录”重新打开。")
         if self.context is not None:
-            return self
+            try:
+                # Cached page URLs remain readable after closure; use a local RPC to check liveness.
+                self.context.cookies()
+                pages = [page for page in self.context.pages if not page.is_closed()]
+                if self.page is None or self.page.is_closed():
+                    self.page = pages[0] if pages else self.context.new_page()
+                self._pages = list(self.context.pages)
+                return self
+            except PlaywrightError as exc:
+                if self._waiting_login:
+                    raise LoginRequired("浏览器窗口已关闭，请再次点击“登录”重新打开。") from exc
+                log.info("浏览器会话已关闭，重新打开登录浏览器")
+                self.stop()
         user_data = Path(self.cfg.path("USER_DATA_DIR"))
         user_data.mkdir(parents=True, exist_ok=True)
         log.info("启动浏览器（持久化目录：%s）", user_data)
@@ -63,19 +78,23 @@ class Browser:
         allow_headless = self.headless and self.cookie_file().exists()
         if self.headless and not allow_headless:
             print("[注意] 无本地登录 Cookie，调试模式仍用可见窗口（登录必须由你本人完成）")
-        self.context = browser_type.launch_persistent_context(
-            user_data_dir=str(user_data),
-            headless=allow_headless,  # 默认可见：登录/验证码需用户本人操作
-            viewport=self.cfg.get("WINDOW_SIZE"),
-            slow_mo=int(self.cfg.get("SLOW_MO_MS") or 0),
-            accept_downloads=True,
-            args=self._cdp_args(),
-        )
-        self.context.set_default_timeout(int(self.cfg.get("PAGE_LOAD_TIMEOUT_MS") or 60000))
-        self.context.set_default_navigation_timeout(int(self.cfg.get("PAGE_LOAD_TIMEOUT_MS") or 60000))
-        self.restore_cookies()          # ★ 关键：学习通很多是会话级 Cookie，这里显式回灌
-        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
-        self._pages = list(self.context.pages)
+        try:
+            self.context = browser_type.launch_persistent_context(
+                user_data_dir=str(user_data),
+                headless=allow_headless,  # 默认可见：登录/验证码需用户本人操作
+                viewport=self.cfg.get("WINDOW_SIZE"),
+                slow_mo=int(self.cfg.get("SLOW_MO_MS") or 0),
+                accept_downloads=True,
+                args=self._cdp_args(),
+            )
+            self.context.set_default_timeout(int(self.cfg.get("PAGE_LOAD_TIMEOUT_MS") or 60000))
+            self.context.set_default_navigation_timeout(int(self.cfg.get("PAGE_LOAD_TIMEOUT_MS") or 60000))
+            self.restore_cookies()          # ★ 关键：学习通很多是会话级 Cookie，这里显式回灌
+            self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+            self._pages = list(self.context.pages)
+        except PlaywrightError:
+            self.stop()
+            raise
         return self
 
     def _cdp_args(self) -> list[str]:
@@ -277,9 +296,17 @@ class Browser:
         —— 否则会把用户正在填写的登录表单刷掉，导致“怎么都登录不上”。
         只有当页面已离开登录地址（说明用户提交成功、平台自行跳转）时，才做一次跳转核验。
         """
+        self.start()
+        self._waiting_login = True
+        try:
+            return self._wait_for_manual_login(timeout, on_prompt, should_cancel)
+        finally:
+            self._waiting_login = False
+
+    def _wait_for_manual_login(self, timeout: int | None, on_prompt: Any,
+                               should_cancel: Any) -> bool:
         from browser.actions import safe_goto  # 延迟导入避免循环
 
-        self.start()
         assert self.page is not None
         timeout = int(timeout or self.cfg.get("LOGIN_WAIT_TIMEOUT_SEC") or 900)
         poll = max(1.0, float(self.cfg.get("LOGIN_POLL_SEC") or 3))
@@ -290,7 +317,8 @@ class Browser:
             self.save_cookies()      # 提前返回也要落盘：否则换号/首登识别为“已有登录”却从不写 cookies.json→没记住
             return True
 
-        safe_goto(self.page, self.cfg.get("CHAOXING_LOGIN_URL"), attempts=3)
+        if not safe_goto(self.page, self.cfg.get("CHAOXING_LOGIN_URL"), attempts=3):
+            raise LoginRequired("无法打开登录页面，请检查网络后再次点击“登录”。")
         try:
             self.page.bring_to_front()
         except Exception:
@@ -310,10 +338,12 @@ class Browser:
         verified_at = 0.0
         while time.time() - start_ts < timeout:
             try:
+                if self.page.is_closed():
+                    raise LoginRequired("浏览器窗口已关闭，请再次点击“登录”重新打开。")
                 url = str(self.page.url or "")
             except PlaywrightError as exc:
                 log.warning("登录状态检查失败（页面可能被关闭）：%s", exc)
-                raise LoginRequired("浏览器页面已被关闭，请重新运行程序") from exc
+                raise LoginRequired("浏览器窗口已关闭，请再次点击“登录”重新打开。") from exc
             left_login = bool(url) and ("passport" not in url) and ("/login" not in url) \
                 and (not url.startswith("about:"))
             if left_login and self._cookie_logged_in():
@@ -331,7 +361,10 @@ class Browser:
             elapsed = int(time.time() - start_ts)
             if elapsed and elapsed % 30 < int(poll):
                 print(f"    …已等待 {elapsed} 秒，仍在等你本人登录（页面不会被刷新）。")
-            time.sleep(poll)
+            try:
+                self.page.wait_for_timeout(poll * 1000)
+            except PlaywrightError as exc:
+                raise LoginRequired("浏览器窗口已关闭，请再次点击“登录”重新打开。") from exc
         print("\n[超时] 未检测到登录状态。程序不会尝试自动登录。")
         return False
 

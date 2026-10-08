@@ -71,6 +71,7 @@ class FrontendIntegrationTests(unittest.TestCase):
         self.scheduler.kb = SimpleNamespace(search=lambda *a, **k: [],
                                             render_hits=lambda *a, **k: "本地资料：电路中的欧姆定律")
         self.commands = []
+        self.scheduler.do_login = lambda: self.events.put(("info", "登录浏览器已打开（本地测试）"))
         self.scheduler.do_open_item = lambda item_id: self.events.put(("item", "video|电路基础|50%"))
         self.scheduler.do_play = lambda item_id: self.events.put(("playstatus", "电路基础 ｜ 播放中 ｜ 50%"))
         self.scheduler.do_pause = lambda: self.events.put(("info", "播放已暂停"))
@@ -123,6 +124,11 @@ class FrontendIntegrationTests(unittest.TestCase):
         self.page.get_by_role("button", name="暂停", exact=True).click()
         self.assertIn(("play", {"item_id": self.iid}), self.commands)
         self.assertIn(("pause", {}), self.commands)
+
+    def test_login_button_dispatches_and_shows_backend_feedback(self) -> None:
+        self.page.get_by_role("button", name="登录", exact=True).click()
+        self.assertIn(("login", {}), self.commands)
+        expect(self.page.get_by_role("log")).to_contain_text("登录浏览器已打开（本地测试）")
 
     def test_reading_rejects_invalid_duration_then_dispatches_valid_duration(self) -> None:
         self.page.get_by_role("button", name=re.compile("课程阅读资料")).click()

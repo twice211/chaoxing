@@ -292,6 +292,7 @@ class Scheduler(threading.Thread):
 
     # ------------------------------------------------------------ 登录/课程/目录
     def do_login(self) -> None:
+        self.out.put(("info", "正在打开登录浏览器…"))
         self._ensure_browser()
         self.out.put(("focus", "browser"))
         self.out.put(("info", "浏览器已打开，请在其中完成登录（账号/验证码由你本人操作）。点顶部「✕取消」可中止等待：若已登录则记住登录，若未登录则退出登录。"))
