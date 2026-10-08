@@ -245,7 +245,8 @@ class BridgeApi:
         return {"ready": sched.ready.is_set(),
                 "busy": bool(sched.active_action) or sched.login_pending.is_set()
                         or sched.task is not None or not sched.jobs.empty(),
-                "login_pending": sched.login_pending.is_set(), "initialization_error": sched.error,
+                "login_pending": sched.login_pending.is_set(), "login_state": sched.login_state,
+                "initialization_error": sched.error,
                 "course_id": course_id, "courses": courses, "sections": sections,
                 "stats": {"total": len(sections), "finished": sum(bool(x["done"]) for x in sections)},
                 "ai": {"configured": bool(self._cfg.ai_api_key.strip()), "enabled": self._cfg.ai_enabled,

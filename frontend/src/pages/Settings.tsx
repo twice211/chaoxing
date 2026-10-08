@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Empty, Modal, Panel, Toggle } from "../components";
 import {
+  loginStatusLabel,
   settingsPayload,
   mergeSettingsValues,
   remainingDirtyFields,
@@ -163,7 +164,7 @@ export function Settings({
         <div className="account-row">
           <div>
             <strong>
-              {snapshot.login_pending ? "正在等待浏览器登录" : "浏览器账户"}
+              {loginStatusLabel(snapshot.login_state)}
             </strong>
             <p className="muted">
               退出登录会清理本地课程记录，请先确认当前任务已停止。
@@ -176,7 +177,7 @@ export function Settings({
               disabled={disabled}
               onClick={() => void run("login")}
             >
-              登录
+              {snapshot.login_state === "signed_in" ? "打开学习通" : "登录"}
             </Button>
             {snapshot.login_pending && (
               <Button onClick={() => void run("cancel")}>取消登录</Button>

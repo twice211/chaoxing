@@ -161,7 +161,7 @@ export function App() {
                   : desktop.offline
                     ? "界面预览"
                     : snapshot?.ready
-                      ? "就绪"
+                      ? snapshot.login_state === "signed_in" ? "已登录" : "就绪"
                       : "正在连接"}
             </span>
             <Button
@@ -176,7 +176,7 @@ export function App() {
               disabled={disabled}
               onClick={() => void run("login")}
             >
-              登录
+              {snapshot?.login_state === "signed_in" ? "打开学习通" : "登录"}
             </Button>
           </div>
         </header>
@@ -213,6 +213,12 @@ export function App() {
               >
                 <Icon name="close" size={18} />
               </button>
+            </div>
+          )}
+          {snapshot?.login_state === "signed_in" && snapshot.courses.length > 0 && !snapshot.course_id && (
+            <div className="inline-notice" role="status">
+              <strong>已登录，读取到 {snapshot.courses.length} 门课程</strong>
+              <span>在下方“当前课程”中选择一门课程，然后点击“读取目录”。</span>
             </div>
           )}
           <div className="course-toolbar">

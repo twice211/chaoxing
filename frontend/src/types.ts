@@ -17,6 +17,7 @@ export interface Snapshot {
   ready: boolean;
   busy: boolean;
   login_pending: boolean;
+  login_state: "unknown" | "waiting" | "signed_in" | "signed_out";
   initialization_error: string;
   course_id: number | null;
   courses: { id: number; name: string }[];

@@ -41,7 +41,7 @@ export function useDesktop() {
                 ...(typeof kind === "string" ? { kind } : {}),
               });
           }
-          if (event.level === "err" || event.level === "alert")
+          if (event.level === "err")
             setError(
               typeof event.payload === "string"
                 ? event.payload

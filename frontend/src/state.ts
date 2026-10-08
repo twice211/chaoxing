@@ -1,4 +1,13 @@
-import type { BackendEvent, SettingField, Value } from "./types.ts";
+import type { BackendEvent, SettingField, Snapshot, Value } from "./types.ts";
+
+export function loginStatusLabel(state: Snapshot["login_state"] | undefined): string {
+  switch (state) {
+    case "signed_in": return "已登录";
+    case "signed_out": return "未登录";
+    case "waiting": return "正在等待浏览器登录";
+    default: return "登录状态未确认";
+  }
+}
 
 export function progressPercent(fraction: number): number {
   return Math.min(1, Math.max(0, fraction)) * 100;

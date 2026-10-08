@@ -71,7 +71,10 @@ class FrontendIntegrationTests(unittest.TestCase):
         self.scheduler.kb = SimpleNamespace(search=lambda *a, **k: [],
                                             render_hits=lambda *a, **k: "本地资料：电路中的欧姆定律")
         self.commands = []
-        self.scheduler.do_login = lambda: self.events.put(("info", "登录浏览器已打开（本地测试）"))
+        def confirmed_login():
+            self.scheduler.login_state = "signed_in"
+            self.events.put(("ok", "登录浏览器已打开（本地测试）"))
+        self.scheduler.do_login = confirmed_login
         self.scheduler.do_open_item = lambda item_id: self.events.put(("item", "video|电路基础|50%"))
         self.scheduler.do_play = lambda item_id: self.events.put(("playstatus", "电路基础 ｜ 播放中 ｜ 50%"))
         self.scheduler.do_pause = lambda: self.events.put(("info", "播放已暂停"))
@@ -126,9 +129,15 @@ class FrontendIntegrationTests(unittest.TestCase):
         self.assertIn(("pause", {}), self.commands)
 
     def test_login_button_dispatches_and_shows_backend_feedback(self) -> None:
+        self.store.set_meta("current_course", "")
+        self.events.put(("alert", "请在浏览器完成登录"))
         self.page.get_by_role("button", name="登录", exact=True).click()
         self.assertIn(("login", {}), self.commands)
         expect(self.page.get_by_role("log")).to_contain_text("登录浏览器已打开（本地测试）")
+        expect(self.page.locator(".task-status")).to_have_text("已登录")
+        expect(self.page.get_by_role("button", name="打开学习通", exact=True)).to_be_visible()
+        expect(self.page.get_by_text("已登录，读取到 1 门课程", exact=True)).to_be_visible()
+        expect(self.page.locator(".error-banner")).to_have_count(0)
 
     def test_reading_rejects_invalid_duration_then_dispatches_valid_duration(self) -> None:
         self.page.get_by_role("button", name=re.compile("课程阅读资料")).click()
@@ -139,6 +148,12 @@ class FrontendIntegrationTests(unittest.TestCase):
         field.fill("30")
         self.page.get_by_role("button", name="开始阅读", exact=True).click()
         self.assertIn(("read", {"item_id": self.docid, "min_seconds": 30}), self.commands)
+
+    def test_actual_backend_error_stays_visible_after_login_confirmation(self) -> None:
+        self.events.put(("err", "读取课程失败：本地模拟网络故障"))
+        self.page.get_by_role("button", name="登录", exact=True).click()
+        expect(self.page.locator(".task-status")).to_have_text("已登录")
+        expect(self.page.locator(".error-banner")).to_contain_text("读取课程失败：本地模拟网络故障")
 
     def test_settings_preserve_key_and_external_changes_when_only_model_is_edited(self) -> None:
         self.navigate("设置")

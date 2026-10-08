@@ -60,6 +60,36 @@ class WebBridgeTests(unittest.TestCase):
         self.assertTrue(snapshot["sections"][0]["done"])
         self.assertEqual(snapshot["stats"], {"total": 1, "finished": 1})
         self.assertNotIn("private-course", json.dumps(snapshot))
+        self.assertEqual(snapshot["login_state"], "unknown")
+
+    def test_confirmed_login_is_visible_in_snapshot_and_survives_course_refresh_failure(self) -> None:
+        self.scheduler.browser = SimpleNamespace(
+            wait_for_manual_login=lambda **kwargs: True, _cookie_logged_in=lambda: True,
+            save_cookies=lambda: 3,
+        )
+        with patch.object(self.scheduler, "_ensure_browser"), \
+                patch.object(self.scheduler, "do_courses", side_effect=RuntimeError("fixture refresh failure")):
+            with self.assertRaises(RuntimeError):
+                self.scheduler.do_login()
+        self.assertEqual(self.api.bootstrap()["data"]["login_state"], "signed_in")
+        self.assertFalse(self.scheduler.login_pending.is_set())
+
+    def test_interrupted_login_returns_unverified_state_instead_of_remaining_waiting(self) -> None:
+        self.scheduler.browser = SimpleNamespace(
+            wait_for_manual_login=Mock(side_effect=RuntimeError("fixture closed browser")),
+        )
+        with patch.object(self.scheduler, "_ensure_browser"):
+            with self.assertRaises(RuntimeError):
+                self.scheduler.do_login()
+        self.assertEqual(self.api.bootstrap()["data"]["login_state"], "unknown")
+        self.assertFalse(self.scheduler.login_pending.is_set())
+
+    def test_explicit_logout_clears_confirmed_login_status(self) -> None:
+        self.scheduler.login_state = "signed_in"
+        self.scheduler.browser = SimpleNamespace(logout=lambda: None)
+        with patch.object(self.scheduler, "_forget_courses_local", return_value=0):
+            self.scheduler.do_logout()
+        self.assertEqual(self.api.bootstrap()["data"]["login_state"], "signed_out")
 
     def test_commands_are_queued_instead_of_running_browser_on_api_thread(self) -> None:
         result = self.api.command("play", {"item_id": 17})

@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
-from typing import Any
+from typing import Any, Literal
 
 from utils.logger import get_logger
 from utils.text import one_line
@@ -34,6 +34,7 @@ class Scheduler(threading.Thread):
         self.task_stop = threading.Event()       # 仅用于取消当前长任务（连做/自动作答）
         self.login_cancel = threading.Event()
         self.login_pending = threading.Event()   # 登录等待是否正在进行（供“取消登录”判断走哪条路径）
+        self.login_state: Literal["unknown", "waiting", "signed_in", "signed_out"] = "unknown"
         self.task: Any = None                    # 协作式长任务（生成器）
         self.active_action = ""
         self._wake_at = 0.0                      # 任务被 _wait 挂起时的唤醒时间
@@ -292,6 +293,14 @@ class Scheduler(threading.Thread):
 
     # ------------------------------------------------------------ 登录/课程/目录
     def do_login(self) -> None:
+        self.login_state = "waiting"
+        try:
+            self._do_login()
+        finally:
+            if self.login_state == "waiting":
+                self.login_state = "unknown"
+
+    def _do_login(self) -> None:
         self.out.put(("info", "正在打开登录浏览器…"))
         self._ensure_browser()
         self.out.put(("focus", "browser"))
@@ -309,6 +318,7 @@ class Scheduler(threading.Thread):
         except Exception:
             logged_now = False
         if ok or logged_now:
+            self.login_state = "signed_in"
             n = 0
             try:
                 n = self.browser.save_cookies()
@@ -327,6 +337,7 @@ class Scheduler(threading.Thread):
             try:
                 self.browser.logout()
                 cleared = self._forget_courses_local()
+                self.login_state = "signed_out"
                 self.out.put(("warn", f"已取消登录：未检测到登录 Cookie，已退出并清空记住的登录态，本地课程数据已清除{f'（{cleared} 门）' if cleared else ''}（下次需重新登录）。"))
             except Exception as exc:
                 self.out.put(("err", f"取消登录失败：{exc}"))
@@ -343,6 +354,7 @@ class Scheduler(threading.Thread):
     def do_logout(self) -> None:
         """退出登录：打断登录等待 + 清空持久化登录态 + 清空本地课程数据（谁登录就是谁的）。"""
         self.login_cancel.set()
+        self.login_state = "unknown"
         try:
             if self.browser is not None:
                 self.browser.logout()
@@ -352,6 +364,7 @@ class Scheduler(threading.Thread):
                 if snap.exists():
                     snap.unlink()
             cleared = self._forget_courses_local()
+            self.login_state = "signed_out"
             self.out.put(("warn", f"已退出登录：清空记住的登录态，本地课程数据已清除{f'（{cleared} 门）' if cleared else ''}（下次需重新登录）。"))
         except Exception as exc:
             self.out.put(("err", f"退出登录失败：{exc}"))
