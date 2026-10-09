@@ -105,6 +105,15 @@ class QuestionExtractor:
 
     # ------------------------------------------------------------ JS 主路径
     def extract(self, page: Any) -> list[Question]:
+        """Blocking CLI path; desktop uses extract_gen with cooperative AI waits."""
+        gen = self.extract_gen(page)
+        while True:
+            try:
+                next(gen)
+            except StopIteration as done:
+                return done.value
+
+    def extract_gen(self, page: Any, vision_wait: Any = None) -> Any:
         payload = {
             "roots": SELECTORS["question_root"],
             "stems": SELECTORS["question_stem"],
@@ -149,7 +158,40 @@ class QuestionExtractor:
                     import hashlib
                     import json as _json
                     sig = hashlib.md5(_json.dumps(raw, ensure_ascii=False)[:4000].encode("utf-8")).hexdigest()[:16]
-                    ocr = self._try_vision(frame, sig)
+                    if vision_wait is None:
+                        ocr = self._try_vision(frame, sig)
+                    else:
+                        from utils import visocr
+                        import time
+                        key = f"{str(frame.url or '')[:160]}|{sig}"
+                        hit = visocr._CACHE.get(key)
+                        if hit and time.time() - hit[0] < visocr._TTL:
+                            ocr = hit[1]
+                        else:
+                            ai = self._ai_client()
+                            frame_url = str(frame.url or "")
+                            content = [(Question.from_raw(item).fp, str(item.get("kind")), str(item.get("no")))
+                                       for item in raw]
+                            b64 = visocr.capture_question_image(frame) if ai and ai.enabled else None
+                            ocr = (yield from vision_wait(ai, b64)) if b64 else None
+                            if b64:
+                                # OCR waits while the platform can navigate or replace its
+                                # DOM. Discard changed content; refresh same-question controls.
+                                try:
+                                    if str(frame.url or "") != frame_url or frame not in page.frames:
+                                        return []
+                                    live_raw = frame.evaluate(EXTRACT_QUESTIONS_JS, payload) or []
+                                    live_content = [(Question.from_raw(item).fp, str(item.get("kind")), str(item.get("no")))
+                                                    for item in live_raw]
+                                except Exception:
+                                    return []
+                                if live_content != content:
+                                    return []
+                                raw = live_raw
+                                sig = hashlib.md5(_json.dumps(raw, ensure_ascii=False)[:4000].encode("utf-8")).hexdigest()[:16]
+                                key = f"{frame_url[:160]}|{sig}"
+                            if ocr:
+                                visocr._CACHE[key] = (time.time(), ocr)
                 except Exception:
                     ocr = None
                 if ocr:

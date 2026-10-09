@@ -49,15 +49,17 @@ export function Grades({
 }
 export function Search({
   events,
+  courseId,
   run,
   disabled,
 }: {
   events: BackendEvent[];
+  courseId: number | null;
   run: RunCommand;
   disabled: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const request = useResultRequest(events, "search_results", run);
+  const request = useResultRequest(events, "search_results", courseId, run);
   async function search() {
     if (!query.trim()) {
       request.setError("请输入要搜索的内容。");
@@ -127,14 +129,16 @@ export function Search({
 }
 export function WrongQuestions({
   events,
+  courseId,
   run,
   disabled,
 }: {
   events: BackendEvent[];
+  courseId: number | null;
   run: RunCommand;
   disabled: boolean;
 }) {
-  const request = useResultRequest(events, "wrong_results", run);
+  const request = useResultRequest(events, "wrong_results", courseId, run);
   return (
     <Panel
       title="错题回顾"
@@ -189,53 +193,64 @@ export function WrongQuestions({
 function useResultRequest(
   events: BackendEvent[],
   level: "search_results" | "wrong_results",
+  courseId: number | null,
   run: RunCommand,
 ) {
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const observed = useRef(0);
-  const pending = useRef<number | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const pending = useRef(false);
+  const mounted = useRef(true);
   useEffect(() => {
-    const latest = resultEvent(events, level, observed.current);
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
+    if (!requestId) return;
+    const latest = resultEvent(events, level, { courseId, requestId });
     if (latest) {
-      observed.current = latest.sequence ?? observed.current + 1;
       setResult(eventText(latest));
-      if (
-        pending.current !== null &&
-        (latest.sequence ?? 0) > pending.current
-      ) {
-        pending.current = null;
-        setLoading(false);
-        setError("");
-        setNotice("");
-      }
+      pending.current = false;
+      setLoading(false);
+      setError("");
+      setNotice("");
+      setRequestId(null);
+      return;
     }
-    if (pending.current === null) return;
     const terminal = events.find(
       (event) =>
-        (event.sequence ?? 0) > (pending.current ?? 0) &&
-        ["err", "alert", "request_cancelled"].includes(event.level),
+        event.level === "request_finished" && event.course_id === courseId &&
+        event.request_id === requestId && typeof event.payload !== "string" &&
+        event.payload.request_id === requestId &&
+        event.payload.action === (level === "search_results" ? "search" : "wrong_list"),
     );
-    if (!terminal) return;
-    pending.current = null;
+    if (!terminal || typeof terminal.payload === "string") return;
+    pending.current = false;
+    setRequestId(null);
     setLoading(false);
-    if (terminal.level === "request_cancelled")
-      setNotice("已请求取消，已保留上次结果。");
-    else setError(eventText(terminal));
-  }, [events, level]);
+    if (terminal.payload.status === "cancelled")
+      setNotice("任务已取消，已保留上次结果。");
+    else if (terminal.payload.status !== "succeeded")
+      setError(eventText(terminal) || "操作未完成，请查看运行记录。上次结果已保留。");
+  }, [events, level, courseId, requestId]);
   async function begin(
     action: "search" | "wrong_list",
     params: Record<string, unknown> = {},
   ) {
-    if (pending.current !== null) return;
-    pending.current = events.at(-1)?.sequence ?? 0;
+    if (pending.current) return;
+    pending.current = true;
+    setRequestId(null);
     setLoading(true);
     setError("");
     setNotice("");
-    if (!(await run(action, params))) {
-      pending.current = null;
+    const accepted = await run(action, params, (id) => {
+      if (mounted.current) setRequestId(id);
+    });
+    if (!mounted.current) return;
+    if (!accepted) {
+      pending.current = false;
       setLoading(false);
       setError("请求未被接受，请查看错误提示后重试。上次结果已保留。");
     }

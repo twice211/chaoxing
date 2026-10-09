@@ -23,10 +23,10 @@ export function Settings({
   const [clearKey, setClearKey] = useState(false);
   const [logout, setLogout] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const dirty = useRef(new Set<string>());
   const versions = useRef<Record<string, number>>({});
   const pending = useRef<{
-    sequence: number;
     versions: Record<string, number>;
     clear: boolean;
   } | null>(null);
@@ -43,16 +43,19 @@ export function Settings({
   }, [snapshot]);
   useEffect(() => {
     const request = pending.current;
-    if (!request || !snapshot) return;
+    if (!request || !snapshot || !requestId) return;
     const result = events.find(
       (event) =>
-        (event.sequence ?? 0) > request.sequence &&
-        (event.level === "settings_saved" || event.level === "err"),
+        event.level === "request_finished" &&
+        typeof event.payload !== "string" &&
+        event.payload.request_id === requestId &&
+        event.payload.action === "save_settings",
     );
-    if (!result) return;
+    if (!result || typeof result.payload === "string") return;
     pending.current = null;
+    setRequestId(null);
     setSaving(false);
-    if (result.level === "err") {
+    if (result.payload.status !== "succeeded") {
       setStatus("设置保存未完成，请检查运行记录并重试。");
       return;
     }
@@ -85,7 +88,7 @@ export function Settings({
         dirty.current,
       );
     });
-  }, [events, snapshot]);
+  }, [events, snapshot, requestId]);
   async function persist(payload: Record<string, Value>, clear = false) {
     if (pending.current || !snapshot) return;
     const submittedKeys = clear
@@ -94,7 +97,6 @@ export function Settings({
           .map((field) => field.key)
       : Object.keys(payload);
     pending.current = {
-      sequence: events.at(-1)?.sequence ?? 0,
       versions: Object.fromEntries(
         submittedKeys.map((key) => [key, versions.current[key] ?? 0]),
       ),
@@ -103,12 +105,14 @@ export function Settings({
     setSaving(true);
     setStatus(clear ? "正在清除密钥…" : "正在保存设置…");
     if (
-      !(await run("save_settings", {
-        values: payload,
-        ...(clear ? { clear_api_key: true } : {}),
-      }))
+      !(await run(
+        "save_settings",
+        { values: payload, ...(clear ? { clear_api_key: true } : {}) },
+        setRequestId,
+      ))
     ) {
       pending.current = null;
+      setRequestId(null);
       setSaving(false);
       setStatus("设置保存未完成，请检查错误提示。");
     }

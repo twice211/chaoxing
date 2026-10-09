@@ -54,6 +54,17 @@ def recognize_questions(ai: Any, frame: Any, sig: str = "") -> list[dict] | None
     now = time.time()
     if hit and now - hit[0] < _TTL:
         return hit[1]
+    b64 = capture_question_image(frame)
+    if b64 is None:
+        return None
+    out = recognize_image(ai, b64)
+    if out:
+        _CACHE[key] = (time.time(), out)
+    return out
+
+
+def capture_question_image(frame: Any) -> str | None:
+    """Capture plain base64 on the browser owner thread."""
     try:
         marked = False
         for sel in _SELECTORS:
@@ -80,6 +91,11 @@ def recognize_questions(ai: Any, frame: Any, sig: str = "") -> list[dict] | None
         log.debug("题目截图失败：%s", exc)
         return None
 
+    return b64
+
+
+def recognize_image(ai: Any, b64: str) -> list[dict] | None:
+    """Recognize plain image data; never accepts a browser object."""
     models: list[str] = []
     try:
         if ai.cfg.ai_model:
@@ -102,7 +118,6 @@ def recognize_questions(ai: Any, frame: Any, sig: str = "") -> list[dict] | None
             if isinstance(data, list) and data:
                 out = [d for d in data if isinstance(d, dict)]
                 if out:
-                    _CACHE[key] = (time.time(), out)
                     log.info("视觉识别成功（模型 %s，%s 题，图 %sKB）", m, len(out), len(b64) // 1024)
                     return out
         except Exception as exc:

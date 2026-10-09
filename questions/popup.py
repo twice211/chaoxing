@@ -38,6 +38,7 @@ class PopupWatcher:
     extractor: QuestionExtractor = field(default=None)   # type: ignore[assignment]
     on_event: Callable[[str], None] | None = None        # 通知上层（如暂停播放）
     on_out: Callable[[str, str], None] | None = None     # 把事件回流到界面：(level, text)
+    on_check: Callable[[Any], int] | None = None  # Desktop schedules the cooperative path.
     min_interval_sec: float = 5.0
     _seen: set = field(default_factory=set)
     _last: float = 0.0
@@ -207,6 +208,19 @@ class PopupWatcher:
 
     # ------------------------------------------------------------ 主入口
     def check(self, page: Any) -> int:
+        if self.on_check is not None:
+            return self.on_check(page)
+        return self._consume(self.check_gen(page))
+
+    @staticmethod
+    def _consume(gen: Any) -> Any:
+        while True:
+            try:
+                next(gen)
+            except StopIteration as done:
+                return done.value
+
+    def check_gen(self, page: Any, answer_wait: Any = None, extract_wait: Any = None) -> Any:
         """
         检查页面是否出现新题目；有则打印题目 + AI 解析。
         返回新发现并处理的题目数。任何异常都不影响播放主流程。
@@ -235,7 +249,7 @@ class PopupWatcher:
                     log.debug("视频弹题行转换失败", exc_info=True)
         else:
             try:
-                questions = self.extractor.extract(page)
+                questions = (yield from extract_wait(self.extractor, page)) if extract_wait else self.extractor.extract(page)
             except Exception as exc:
                 log.debug("弹题探测失败：%s", exc)
                 return 0
@@ -273,7 +287,7 @@ class PopupWatcher:
             log.info("检测到随堂题（inView=%s modal=%s）：%s", getattr(q, "in_view", None),
                      getattr(q, "modal", None), q.preview(50))
             try:
-                self._handle(q, page)
+                yield from self._handle_gen(q, page, answer_wait, extract_wait)
             except Exception as exc:
                 log.exception("弹题处理失败")
                 err(f"弹题处理失败：{exc}")
@@ -322,6 +336,11 @@ class PopupWatcher:
 
     # ------------------------------------------------------------ 单题处理
     def _handle(self, q: Any, page: Any = None) -> None:
+        self._consume(self._handle_gen(q, page))
+
+    def _handle_gen(self, q: Any, page: Any = None, answer_wait: Any = None,
+                    extract_wait: Any = None) -> Any:
+        original_url = str(getattr(page, "url", "") or "")
         writable = page is not None and self._writable(page)
         submit_ok = writable and self._writable(page, want_submit=True)
         print("\n" + BANNER)
@@ -357,8 +376,32 @@ class PopupWatcher:
                 log.warning("弹题资料检索失败：%s", exc)
         ans = None
         try:
-            ans = self.engine.answer({**q.as_dict(), "id": qid}, evidence=evidence, mode="practice",
-                                     chapter=self.chapter_key, qno=q.no)
+            question = {**q.as_dict(), "id": qid}
+            kwargs = dict(evidence=evidence, mode="practice", chapter=self.chapter_key, qno=q.no)
+            if answer_wait:
+                ans = yield from answer_wait(question, **kwargs)
+                if ans is None or str(getattr(page, "url", "") or "") != original_url:
+                    return
+                # The user may already have answered, dismissed, or replaced the quiz.
+                from browser import quiz
+                from questions.models import Question
+                raws = quiz.extract_items(page)
+                if raws:
+                    current = [Question.from_raw(raw) for raw in raws]
+                else:
+                    current = ((yield from extract_wait(self.extractor, page)) if extract_wait
+                               else self.extractor.extract(page))
+                if str(getattr(page, "url", "") or "") != original_url:
+                    return
+                live = next((item for item in current if item.fp == q.fp and not item.is_answered()
+                             and (item.in_view or item.modal)), None)
+                if live is None:
+                    return
+                q = live
+                writable = page is not None and self._writable(page)
+                submit_ok = writable and self._writable(page, want_submit=True)
+            else:
+                ans = self.engine.answer(question, **kwargs)
             log.info("弹题作答判定：answer=%r needs_human=%s has_image=%s writable=%s submit_ok=%s",
                      (ans.answer or "")[:12], ans.needs_human, q.has_image, writable, submit_ok)
             print("\n" + report.render_answer(ans))
@@ -370,6 +413,7 @@ class PopupWatcher:
                 warn("该题被判定“需要人工确认”，请自己核对后再选。")
                 self._emit("warn", "该题需人工确认，未自动作答")
         except Exception as exc:
+            ans = None  # A failed live-page/AI check must never fall through to writes.
             log.exception("弹题 AI 解析失败")
             err(f"AI 解析失败：{exc}")
             self._emit("err", f"AI 解析失败：{exc}")

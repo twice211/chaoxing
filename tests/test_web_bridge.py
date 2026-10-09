@@ -8,6 +8,7 @@ import queue
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -94,7 +95,10 @@ class WebBridgeTests(unittest.TestCase):
     def test_commands_are_queued_instead_of_running_browser_on_api_thread(self) -> None:
         result = self.api.command("play", {"item_id": 17})
         self.assertTrue(result["ok"])
-        self.assertEqual(self.scheduler.jobs.get_nowait(), ("play", {"item_id": 17}))
+        action, params = self.scheduler.jobs.get_nowait()
+        request = params.pop("_request_context")
+        self.assertEqual((action, params), ("play", {"item_id": 17}))
+        self.assertEqual(request.request_id, result["request_id"])
 
     def test_invalid_commands_and_parameters_are_rejected_without_enqueue(self) -> None:
         cases = [
@@ -164,11 +168,14 @@ class WebBridgeTests(unittest.TestCase):
         self.assertNotIn("new-private-credential", payload)
 
     def test_discussion_confirmation_token_and_boolean_are_preserved(self) -> None:
-        self.assertTrue(self.api.command("discuss_auto_confirm", {
+        result = self.api.command("discuss_auto_confirm", {
             "token": 27, "approved": False,
-        })["ok"])
-        self.assertEqual(self.scheduler.jobs.get_nowait(),
-                         ("discuss_auto_confirm", {"token": 27, "approved": False}))
+        })
+        self.assertTrue(result["ok"])
+        action, params = self.scheduler.jobs.get_nowait()
+        request = params.pop("_request_context")
+        self.assertEqual((action, params), ("discuss_auto_confirm", {"token": 27, "approved": False}))
+        self.assertEqual(request.request_id, result["request_id"])
 
     def test_initialization_error_and_busy_state_are_visible(self) -> None:
         self.scheduler.error = "initialization failed"
@@ -218,6 +225,10 @@ class WebBridgeTests(unittest.TestCase):
             with patch("ai.client.AIClient.ask", side_effect=RuntimeError("provider echoed test-private-credential")):
                 api.command("ai_test", {})
                 self.scheduler._pump_once()
+                deadline = time.monotonic() + 2
+                while self.scheduler.task is not None and time.monotonic() < deadline:
+                    self.scheduler._pump_once()
+                self.assertIsNone(self.scheduler.task, "AI result was not consumed")
             self.assertNotIn("test-private-credential", output.getvalue())
             self.assertIn("provider echoed", output.getvalue())
         finally:

@@ -189,7 +189,6 @@ class Store:
 
     # ---------------- 章节 ----------------
     def replace_chapters(self, course_id: int, chapters: Sequence[dict[str, Any]]) -> int:
-        self.exec("DELETE FROM chapters WHERE course_id=?", (course_id,))
         rows = [
             (
                 course_id, ch.get("chap_key") or _hash(ch.get("title", "") + str(i)),
@@ -198,11 +197,12 @@ class Store:
             )
             for i, ch in enumerate(chapters)
         ]
-        self.exec_many(
-            "INSERT OR REPLACE INTO chapters(course_id,chap_key,no,title,parent_key,level,order_idx)"
-            " VALUES(?,?,?,?,?,?,?)",
-            rows,
-        )
+        with self._write_lock, self.conn as conn:
+            conn.execute("DELETE FROM chapters WHERE course_id=?", (course_id,))
+            conn.executemany(
+                "INSERT OR REPLACE INTO chapters(course_id,chap_key,no,title,parent_key,level,order_idx)"
+                " VALUES(?,?,?,?,?,?,?)", rows,
+            )
         return len(rows)
 
     def list_chapters(self, course_id: int) -> list[dict[str, Any]]:
@@ -336,7 +336,6 @@ class Store:
         """整批替换某课程成绩(先删后插),避免历史叠加。返回写入条数。"""
         now = now_str("%Y-%m-%d %H:%M:%S.%f")
         old = {(r["kind"], r["name"]): r for r in self.list_grades(course_id)}
-        self.exec("DELETE FROM grades WHERE course_id=?", (course_id,))
         data = []
         for r in rows or []:
             if not (r.get("name") or r.get("kind")):
@@ -352,13 +351,12 @@ class Store:
                 base_score, base_at = r["score"], now
             data.append((course_id, name, kind, r.get("score"), r.get("full"), r.get("weight"), overview,
                          r.get("note", ""), now, base_score, base_at))
-        if not data:
-            return 0
-        self.exec_many(
-            "INSERT INTO grades(course_id,name,kind,score,full,weight,overview,note,synced_at,"
-            "credit_base_score,credit_base_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            data,
-        )
+        with self._write_lock, self.conn as conn:
+            conn.execute("DELETE FROM grades WHERE course_id=?", (course_id,))
+            conn.executemany(
+                "INSERT INTO grades(course_id,name,kind,score,full,weight,overview,note,synced_at,"
+                "credit_base_score,credit_base_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", data,
+            )
         return len(data)
 
     def list_grades(self, course_id: int) -> list[dict[str, Any]]:

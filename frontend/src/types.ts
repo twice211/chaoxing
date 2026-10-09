@@ -38,12 +38,22 @@ export interface Snapshot {
 export interface BatchConfirmation {
   token: number;
   text: string;
+  course_id: number;
   kind?: string;
 }
 export interface BackendEvent {
   level: string;
   payload: string | Record<string, unknown>;
+  course_id?: number | null;
+  request_id?: string | null;
   sequence?: number;
+}
+export type RequestStatus = "succeeded" | "failed" | "rejected" | "cancelled";
+export interface RequestFinished {
+  request_id: string;
+  action: Action;
+  status: RequestStatus;
+  message: string;
 }
 export type Action =
   | "login"
@@ -86,7 +96,7 @@ export interface DesktopAPI {
   command(
     action: Action,
     params: Record<string, unknown>,
-  ): Promise<{ ok: true } | { ok: false; error: string }>;
+  ): Promise<{ ok: true; request_id: string } | { ok: false; error: string }>;
 }
 declare global {
   interface Window {
@@ -96,4 +106,5 @@ declare global {
 export type RunCommand = (
   action: Action,
   params?: Record<string, unknown>,
+  onAccepted?: (requestId: string) => void,
 ) => Promise<boolean>;

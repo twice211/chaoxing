@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDesktop } from "./bridge";
 import { Button, Empty, Icon, Modal } from "./components";
-import { eventText, progressPercent } from "./state";
+import { courseEvents, eventText, progressPercent } from "./state";
 import { Study } from "./pages/Study";
 import { Exercises } from "./pages/Exercises";
 import { Discussions } from "./pages/Discussions";
@@ -57,6 +57,8 @@ type Page = (typeof navigation)[number]["id"];
 export function App() {
   const desktop = useDesktop();
   const { snapshot, events, run } = desktop;
+  const courseId = snapshot?.course_id ?? null;
+  const scopedEvents = courseEvents(events, courseId);
   const [page, setPage] = useState<Page>("study");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -90,7 +92,7 @@ export function App() {
         "discuss_confirm",
       ].includes(event.level),
   );
-  const batch = desktop.confirmation;
+  const batch = desktop.confirmation?.course_id === courseId ? desktop.confirmation : null;
   async function respond(approved: boolean) {
     if (!batch) return;
     if (await run("discuss_auto_confirm", { token: batch.token, approved }))
@@ -336,11 +338,12 @@ export function App() {
             <div className="workspace-pages">
               <div hidden={page !== "study"}>
                 <Study
+                  key={courseId}
                   snapshot={snapshot}
                   selected={selected}
                   run={run}
                   disabled={disabled}
-                  events={events}
+                  events={scopedEvents}
                 />
               </div>
               <div hidden={page !== "exercise"}>
@@ -353,7 +356,7 @@ export function App() {
               </div>
               <div hidden={page !== "grades"}>
                 <Grades
-                  events={events}
+                  events={scopedEvents}
                   run={run}
                   disabled={disabled}
                   hasCourse={Boolean(snapshot?.course_id)}
@@ -361,17 +364,18 @@ export function App() {
               </div>
               <div hidden={page !== "discuss"}>
                 <Discussions
+                  key={courseId}
                   snapshot={snapshot}
-                  events={events}
+                  events={scopedEvents}
                   run={run}
                   disabled={disabled}
                 />
               </div>
               <div hidden={page !== "search"}>
-                <Search events={events} run={run} disabled={disabled} />
+                <Search key={courseId} courseId={courseId} events={scopedEvents} run={run} disabled={disabled} />
               </div>
               <div hidden={page !== "wrong"}>
-                <WrongQuestions events={events} run={run} disabled={disabled} />
+                <WrongQuestions key={courseId} courseId={courseId} events={scopedEvents} run={run} disabled={disabled} />
               </div>
               <div hidden={page !== "settings"}>
                 <Settings

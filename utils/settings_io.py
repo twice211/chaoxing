@@ -10,7 +10,9 @@ utils.settings_io —— 小窗设置窗口的读写后端
 from __future__ import annotations
 
 import ast
-import importlib.util
+import math
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -88,9 +90,12 @@ def _literal(value: Any, kind: str) -> str:
             return "0"
     if kind == "float":
         try:
-            return repr(float(value))
+            number = float(value)
         except (TypeError, ValueError):
             return "0.0"
+        if not math.isfinite(number):
+            raise ValueError("浮点设置必须为有限数值")
+        return repr(number)
     text = "" if value is None else str(value)
     return repr(text)
 
@@ -98,12 +103,15 @@ def _literal(value: Any, kind: str) -> str:
 def save(values: dict[str, Any], path: Path | None = None) -> Path:
     """把托管块写入 user_config.py（不存在则创建）。"""
     target = Path(path) if path else config_path()
-    text = target.read_text(encoding="utf-8") if target.exists() else ""
+    text = target.read_text(encoding="utf-8-sig") if target.exists() else ""
     # 先删掉旧的托管块，避免重复堆积
-    if MARK_START in text:
-        head, _, rest = text.partition(MARK_START)
-        _old, _, tail = rest.partition(MARK_END)
-        text = head + tail
+    original_lines = text.splitlines(keepends=True)
+    starts = [i for i, line in enumerate(original_lines) if line.rstrip("\r\n") == MARK_START]
+    ends = [i for i, line in enumerate(original_lines) if line.rstrip("\r\n") == MARK_END]
+    if starts or ends:
+        if len(starts) != 1 or len(ends) != 1 or starts[0] >= ends[0]:
+            raise ValueError("配置托管块标记不完整或重复，原文件已保留")
+        text = "".join(original_lines[:starts[0]] + original_lines[ends[0] + 1:])
     lines = [MARK_START]
     for group in GROUPS:
         keys = [k for k, meta in EDITABLE.items() if meta[2] == group]
@@ -118,11 +126,27 @@ def save(values: dict[str, Any], path: Path | None = None) -> Path:
     lines.append(MARK_END)
     lines.append("")
     body = text.rstrip() + "\n" + "\n".join(lines)
-    target.write_text(body, encoding="utf-8")
     try:
-        ast.parse(body)      # 自检：写坏就报错而不是静默失败
+        ast.parse(body)
+        compile(body, str(target), "exec")
     except SyntaxError as exc:
-        raise ValueError(f"写入 user_config.py 后语法检查失败：{exc}") from exc
+        raise ValueError("配置语法检查失败，原文件已保留") from exc
+    # Temporary credentials remain under the existing ignored local-data directory.
+    private_dir = target.parent / "data" / ".config-write"
+    private_dir.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                                         prefix="config-", suffix=".tmp", dir=private_dir,
+                                         delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return target
 
 
@@ -131,12 +155,11 @@ def reload_into(cfg_obj: Any, path: Path | None = None) -> int:
     target = Path(path) if path else config_path()
     if not target.exists():
         return 0
-    spec = importlib.util.spec_from_file_location("_user_cfg_reload", target)
-    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    assert spec and spec.loader
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    namespace = {"__name__": "_user_cfg_reload", "__file__": str(target)}
+    # Read current source directly; bytecode caches can be stale for same-size rapid saves.
+    exec(compile(target.read_text(encoding="utf-8-sig"), str(target), "exec"), namespace)
     n = 0
-    for k, v in vars(mod).items():
+    for k, v in namespace.items():
         if k.isupper():
             cfg_obj.values[k] = v
             n += 1

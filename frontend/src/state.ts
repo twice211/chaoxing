@@ -70,14 +70,24 @@ export function appendEvents(
 export function eventText(event: BackendEvent): string {
   return typeof event.payload === "string"
     ? event.payload
-    : String(event.payload.text ?? "");
+    : String(event.payload.text ?? event.payload.message ?? "");
+}
+export function courseEvents(
+  events: BackendEvent[],
+  courseId: number | null,
+): BackendEvent[] {
+  return events.filter((event) => event.course_id === courseId);
 }
 export function resultEvent(
   events: BackendEvent[],
   level: "search_results" | "wrong_results",
-  after = 0,
+  context: { courseId: number | null; requestId: string },
 ): BackendEvent | undefined {
   return [...events]
     .reverse()
-    .find((event) => event.level === level && (event.sequence ?? 1) > after);
+    .find(
+      (event) => event.level === level &&
+        event.course_id === context.courseId &&
+        event.request_id === context.requestId,
+    );
 }

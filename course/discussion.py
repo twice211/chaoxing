@@ -466,7 +466,8 @@ class DiscussionRunner:
         return out
 
     def generate_drafts(self, acts: list[dict], ctx: dict, course: dict,
-                        on_partial: Any = None, should_stop: Any = None) -> list[dict]:
+                        on_partial: Any = None, should_stop: Any = None,
+                        worker_factory: Any = None) -> list[dict]:
         """批量+并行生成草稿(提速核心)。返回按 acts 顺序、指纹去重后的草稿列表。
 
         on_partial(drafts, total) 供 UI 增量刷新;should_stop() 置位后不再补发新调用。
@@ -506,10 +507,13 @@ class DiscussionRunner:
             if on_partial:
                 on_partial(_dedup([v for _k, v in sorted(results.items())] + extras), len(acts))
 
-        ex = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="discuss-batch")
+        ex = (worker_factory(workers=workers, pending=max(16, len(acts))) if worker_factory
+              else ThreadPoolExecutor(max_workers=workers, thread_name_prefix="discuss-batch"))
         try:
             futs = [ex.submit(self._batch_map, b, course, acts, ctx) for b in batches]
             for f in as_completed(futs):
+                if should_stop and should_stop():
+                    break
                 try:
                     results.update(f.result())
                 except Exception as exc:
@@ -536,7 +540,9 @@ class DiscussionRunner:
                 if not results and not extras and missing:
                     _note("单条补生成也没有产出：检查 AI 密钥/额度/网络（日志 logs/ 有详情）")
         finally:
-            ex.shutdown(wait=False, cancel_futures=True)
+            # Desktop pools use daemon threads. Join here in the AI job, never in the
+            # browser loop, so every HTTP session eventually finishes its own cleanup.
+            ex.shutdown(wait=bool(worker_factory), cancel_futures=True)
         return _dedup([v for _k, v in sorted(results.items())] + extras)
 
     def prepare_drafts(self, page: Any, course: dict, replied_keys: set[str],

@@ -151,30 +151,37 @@ class DesktopScheduler(Scheduler):
             current["AI_API_KEY"] = old_key
         path = settings.save(current)
         settings.reload_into(self.cfg, path)
-        self.out.put(("settings_saved", "设置已保存并生效"))
+        self._emit(("settings_saved", "设置已保存并生效"))
 
     def do_ai_test(self) -> None:
-        from ai.client import AIClient
-
         if not self.cfg.ai_enabled:
-            self.out.put(("err", "请先保存 API 密钥并开启 AI 解析"))
+            self._emit(("err", "请先保存 API 密钥并开启 AI 解析"))
             return
-        self.out.put(("info", "正在测试 AI 连接…"))
-        reply = AIClient(self.cfg).ask("你是连通性测试助手", "只回复两个字：正常",
-                                       purpose="settings_ping")
-        self.out.put(("ok", f"AI 连接成功：{self.cfg.ai_model}，回复：{reply[:40]}"))
+        self._emit(("info", "正在测试 AI 连接…"))
+        self._start_task(self._ai_test_gen(), preserve_session=True)
+
+    def _ai_test_gen(self):
+        from ai.client import AIClient
+        from ui.ai_worker import CapturedConfig
+        cfg = CapturedConfig(self.cfg)
+        system, prompt = "你是连通性测试助手", "只回复两个字：正常"
+        cancelled = threading.Event()
+        client = AIClient(cfg, cancel_event=cancelled)
+        reply = yield from self._ai_wait(client.ask, system, prompt, purpose="settings_ping", cancelled=cancelled)
+        if reply is not None:
+            self._emit(("ok", f"AI 连接成功：{cfg.ai_model}，回复：{reply[:40]}"))
 
     def do_search(self, text: str) -> None:
         if not text.strip():
             return
         result = self.kb.search(text, course_id=self._cid())
-        self.out.put(("search_results", self.kb.render_hits(result, limit=6)))
+        self._emit(("search_results", self.kb.render_hits(result, limit=6)))
 
     def do_wrong_list(self) -> None:
         rows = self._store().list_wrong(course_id=self._cid(), limit=40)
         lines = [f"{i}. 错{r['wrong_count']}次 ｜ {one_line(r['stem'])[:50]} ｜ 答案 {r.get('answer') or '—'}"
                  for i, r in enumerate(rows, 1)]
-        self.out.put(("wrong_results", "\n".join(lines) if lines else "错题本是空的。"))
+        self._emit(("wrong_results", "\n".join(lines) if lines else "错题本是空的。"))
 
 
 class BridgeApi:
@@ -268,10 +275,13 @@ class BridgeApi:
                 events = []
                 for _ in range(200):
                     try:
-                        level, payload = self._out.get_nowait()
+                        event = self._out.get_nowait()
+                        level, payload = event
                     except queue.Empty:
                         break
-                    events.append({"level": level, "payload": self._redact(payload)})
+                    events.append({"level": level, "payload": self._redact(payload),
+                                   "course_id": getattr(event, "course_id", None),
+                                   "request_id": getattr(event, "request_id", None)})
                 return {"ok": True, "data": {"events": events, "snapshot": snapshot}}
         except sqlite3.Error:
             log.exception("刷新桌面状态失败")
@@ -304,11 +314,7 @@ class BridgeApi:
                     if value is _REQUIRED:
                         raise ValueError("缺少必需参数")
                     parsed[key] = validate(value)
-            if action in ("cancel", "stop", "stop_play", "logout"):
-                self._scheduler.task_stop.set()
-            if action in ("cancel", "logout"):
-                self._scheduler.login_cancel.set()
-            self._scheduler.submit(action, **parsed)
-            return {"ok": True}
+            request_id = self._scheduler.submit_request(action, **parsed)
+            return {"ok": True, "request_id": request_id}
         except (ValueError, TypeError):
             return {"ok": False, "error": "操作或设置参数无效，请检查输入范围和类型"}

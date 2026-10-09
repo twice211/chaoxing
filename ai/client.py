@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import threading
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -74,11 +75,17 @@ def _extract_json(text: str) -> Any:
 
 
 class AIClient:
-    def __init__(self, cfg: Any, store: Any | None = None) -> None:
+    def __init__(self, cfg: Any, store: Any | None = None,
+                 cancel_event: threading.Event | None = None) -> None:
         self.cfg = cfg
         self.store = store
         self.usage = AIUsage()
-        self._session = requests.Session()
+        self.cancel_event = cancel_event
+
+    def _safe_error(self, value: object) -> str:
+        text = str(value)
+        key = str(self.cfg.ai_api_key or "")
+        return text.replace(key, "[密钥已隐藏]") if key else text
 
     # ------------------------------------------------------------ 基础
     @property
@@ -89,6 +96,8 @@ class AIClient:
         return f"{str(self.cfg.ai_base_url).rstrip('/')}/chat/completions"
 
     def _check(self) -> None:
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise AIUnavailable("AI 请求已取消")
         if not self.cfg.get("AI_ENABLE"):
             raise AIUnavailable("AI_ENABLE=False，已在配置中关闭 AI 功能")
         if not self.cfg.ai_api_key:
@@ -141,26 +150,30 @@ class AIClient:
 
     def _once(self, body: dict[str, Any], headers: dict[str, str], purpose: str = "",
               timeout: float | None = None) -> str:
+        self._check()
         timeout = float(timeout or self.cfg.get("AI_TIMEOUT_SEC") or 60)
         try:
-            resp = self._session.post(self._url(), json=body, headers=headers, timeout=timeout)
+            # A client may be shared by parallel discussion jobs; Sessions are not.
+            with requests.Session() as session:
+                resp = session.post(self._url(), json=body, headers=headers, timeout=timeout)
         except requests.RequestException as exc:
-            raise AIRequestError(f"网络异常：{exc}") from exc
+            raise AIRequestError(f"网络异常：{self._safe_error(exc)}") from None
         if resp.status_code in (408, 429, 500, 502, 503, 504):
-            raise AIRequestError(f"服务暂时不可用 HTTP {resp.status_code}: {resp.text[:200]}")
+            raise AIRequestError(f"服务暂时不可用 HTTP {resp.status_code}: {self._safe_error(resp.text)[:200]}")
         if resp.status_code >= 400:
             # 4xx 多为配置/权限问题，重试无意义：抛不可重试异常
-            raise RuntimeError(f"AI 接口返回 HTTP {resp.status_code}: {resp.text[:300]}")
+            raise RuntimeError(f"AI 接口返回 HTTP {resp.status_code}: {self._safe_error(resp.text)[:300]}")
         try:
             data = resp.json()
         except Exception as exc:
-            raise AIRequestError(f"响应不是 JSON：{resp.text[:200]}") from exc
+            raise AIRequestError(f"响应不是 JSON：{self._safe_error(resp.text)[:200]}") from None
         try:
             choice = data["choices"][0]
             msg = choice.get("message") or {}
             text = msg.get("content") or msg.get("reasoning_content") or ""
         except Exception as exc:
-            raise AIRequestError(f"响应结构异常：{json.dumps(data, ensure_ascii=False)[:300]}") from exc
+            preview = self._safe_error(json.dumps(data, ensure_ascii=False))[:300]
+            raise AIRequestError(f"响应结构异常：{preview}") from None
         text = str(text).strip()
         if not text:
             raise AIRequestError("AI 返回空内容")

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { appendEvents } from "./state";
+import { appendEvents, eventText } from "./state";
 import { createPollingSession } from "./polling";
 import type {
   Action,
@@ -13,16 +13,22 @@ export function useDesktop() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [events, setEvents] = useState<BackendEvent[]>([]);
   const [error, setError] = useState("");
+  const [eventError, setEventError] = useState<BackendEvent | null>(null);
   const [offline, setOffline] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [confirmation, setConfirmation] = useState<BatchConfirmation | null>(
     null,
   );
   const mounted = useRef(true);
+  const currentCourse = useRef<number | null>(null);
   useEffect(() => {
     mounted.current = true;
     const session = createPollingSession(() => window.pywebview?.api, {
-      onSnapshot: setSnapshot,
+      onSnapshot: (next) => {
+        if (currentCourse.current !== next.course_id) setConfirmation(null);
+        currentCourse.current = next.course_id;
+        setSnapshot(next);
+      },
       onError: setError,
       onOffline: setOffline,
       onConnected: () => setError(""),
@@ -31,6 +37,8 @@ export function useDesktop() {
         for (const event of incoming) {
           if (
             event.level === "discuss_confirm" &&
+            event.course_id != null &&
+            event.course_id === currentCourse.current &&
             typeof event.payload !== "string"
           ) {
             const { token, text, kind } = event.payload;
@@ -38,15 +46,15 @@ export function useDesktop() {
               setConfirmation({
                 token,
                 text,
+                course_id: event.course_id,
                 ...(typeof kind === "string" ? { kind } : {}),
               });
           }
-          if (event.level === "err")
-            setError(
-              typeof event.payload === "string"
-                ? event.payload
-                : "操作未完成，请查看运行记录。",
-            );
+          if (
+            event.level === "err" &&
+            (event.course_id == null || event.course_id === currentCourse.current)
+          )
+            setEventError(event);
         }
       },
     });
@@ -59,7 +67,7 @@ export function useDesktop() {
       window.removeEventListener("pywebviewready", connect);
     };
   }, []);
-  const run: RunCommand = useCallback(async (action: Action, params = {}) => {
+  const run: RunCommand = useCallback(async (action: Action, params = {}, onAccepted) => {
     const api = window.pywebview?.api;
     if (!api) {
       setError("请在桌面应用中使用此功能。");
@@ -69,6 +77,7 @@ export function useDesktop() {
     try {
       const result = await api.command(action, params);
       if (!result.ok) throw new Error(result.error);
+      if (mounted.current) onAccepted?.(result.request_id);
       if (action === "cancel" && mounted.current)
         setEvents((previous) =>
           appendEvents(previous, [
@@ -87,12 +96,19 @@ export function useDesktop() {
   return {
     snapshot,
     events,
-    error,
+    error: error || (
+      eventError && (eventError.course_id == null || eventError.course_id === snapshot?.course_id)
+        ? eventText(eventError)
+        : ""
+    ),
     offline,
     dispatching,
     confirmation,
     run,
-    clearError: () => setError(""),
+    clearError: () => {
+      setError("");
+      setEventError(null);
+    },
     setConfirmation,
   };
 }

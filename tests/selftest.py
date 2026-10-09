@@ -561,18 +561,22 @@ def t_scheduler_cooperative() -> str:
     s._step_task()
     assert s.task is None and "after-wait" in ev, ev
 
-    # 3) 点“停止”能把一个很长的 _wait 立刻叫醒，任务随即观察到 task_stop
+    # 3) 点“停止”立即关闭等待中的任务，只运行 finally 收尾，不恢复到等待后的副作用
     def long_wait():
-        yield from s._wait(999.0)
-        ev.append("cancelled" if s.task_stop.is_set() else "not-cancelled")
+        try:
+            yield from s._wait(999.0)
+            ev.append("not-cancelled")
+        finally:
+            ev.append("cancelled" if s.task_stop.is_set() else "completed")
 
     s._start_task(long_wait())
     s._step_task()
     assert s._wake_at > _t.monotonic(), "应挂在 ~999s 的等待上"
     s.stop_task()
     assert s.task_stop.is_set() and not s.stop_event.is_set(), "停止=取消任务，不杀线程"
-    s._step_task()                                  # 强制唤醒 → 恢复 → 看到停止
-    assert s.task is None and "cancelled" in ev, ev
+    s._step_task()                                  # 直接关闭生成器 → finally 收尾
+    assert s.task is None and "cancelled" in ev and "not-cancelled" not in ev, ev
+    assert not s.stop_event.is_set(), "取消长任务后调度线程仍应可用"
 
     # 4) 任务在跑时，“抢跑页面”的命令被拒；不相关的开关类仍可执行
     s.task_stop.clear(); s._wake_at = 0.0
