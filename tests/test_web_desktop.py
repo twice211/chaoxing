@@ -56,7 +56,7 @@ class DesktopStartupTests(unittest.TestCase):
                     patch("ui.web_desktop.DesktopScheduler", return_value=scheduler), \
                     patch("ui.web_desktop.BridgeApi"):
                 self.assertEqual(run_desktop(Config(), bundle_path=bundle), 0)
-            self.assertEqual(Path(webview.create_window.call_args.kwargs["url"]), bundle)
+            self.assertEqual(Path(webview.create_window.call_args.kwargs["url"]), bundle.resolve())
             self.assertNotIn("js_api", webview.create_window.call_args.kwargs)
             self.assertEqual(len(window.expose.call_args.args), 3)
             self.assertTrue(webview.start.call_args.kwargs["http_server"])
